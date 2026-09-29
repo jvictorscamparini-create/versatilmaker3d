@@ -1,0 +1,7 @@
+{
+  "name": "Versátil Maker",
+  "description": "Sistema completo para gerenciar sua operação de impressão 3D e vendas em marketplaces como Mercado Livre e Shopee.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
