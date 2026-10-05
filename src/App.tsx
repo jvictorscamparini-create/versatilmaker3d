@@ -366,7 +366,16 @@ export default function App() {
 
             {currentView === "integracao-ml" && <MercadoLivreIntegrationView />}
 
-            {currentView === "configuracoes" && <SettingsView />}
+            {currentView === "configuracoes" && (
+              <SettingsView
+                orders={orders}
+                filaments={filaments}
+                printers={printers}
+                productionCards={productionCards}
+                savedCalculations={savedCalculations}
+                customers={customers}
+              />
+            )}
           </main>
         </div>
       )}

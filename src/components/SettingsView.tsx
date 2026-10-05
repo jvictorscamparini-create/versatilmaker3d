@@ -8,10 +8,40 @@ import {
   QrCode,
   MapPin,
   Bell,
+  Download,
+  Database,
+  ShieldCheck,
+  FileJson,
+  HardDrive,
   RefreshCw,
 } from "lucide-react";
+import { Customer, Filament, OrderItem, Printer, ProductionCard, SavedCalculation } from "../types";
+import {
+  initialCustomers,
+  initialFilaments,
+  initialOrders,
+  initialPrinters,
+  initialProductionCards,
+  initialSavedCalculations,
+} from "../mockData";
 
-export const SettingsView: React.FC = () => {
+interface SettingsViewProps {
+  orders?: OrderItem[];
+  filaments?: Filament[];
+  printers?: Printer[];
+  productionCards?: ProductionCard[];
+  savedCalculations?: SavedCalculation[];
+  customers?: Customer[];
+}
+
+export const SettingsView: React.FC<SettingsViewProps> = ({
+  orders = initialOrders,
+  filaments = initialFilaments,
+  printers = initialPrinters,
+  productionCards = initialProductionCards,
+  savedCalculations = initialSavedCalculations,
+  customers = initialCustomers,
+}) => {
   const [storeName, setStoreName] = useState("Versátil Maker");
   const [whatsapp, setWhatsapp] = useState("(11) 98765-4321");
   const [pixKey, setPixKey] = useState("contato@versatilmaker.com.br");
@@ -20,6 +50,7 @@ export const SettingsView: React.FC = () => {
   const [notifyWhatsApp, setNotifyWhatsApp] = useState(true);
   const [notifyLowFilament, setNotifyLowFilament] = useState(true);
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [backupDownloaded, setBackupDownloaded] = useState(false);
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,12 +58,77 @@ export const SettingsView: React.FC = () => {
     setTimeout(() => setSavedSuccess(false), 3000);
   };
 
+  // Full Database Export to JSON
+  const handleDownloadBackup = () => {
+    const timestamp = new Date().toISOString();
+    const dateFormatted = new Date().toISOString().split("T")[0];
+
+    const databaseBackup = {
+      app: "Versátil Maker - Gestão 3D",
+      version: "1.0.0",
+      exportedAt: timestamp,
+      storeConfig: {
+        storeName,
+        whatsapp,
+        pixKey,
+        cep,
+        cityState,
+        notifyWhatsApp,
+        notifyLowFilament,
+      },
+      summary: {
+        totalOrders: orders.length,
+        totalFilaments: filaments.length,
+        totalPrinters: printers.length,
+        totalProductionCards: productionCards.length,
+        totalCalculations: savedCalculations.length,
+        totalCustomers: customers.length,
+      },
+      database: {
+        orders,
+        filaments,
+        printers,
+        productionCards,
+        savedCalculations,
+        customers,
+      },
+    };
+
+    // Convert to JSON string
+    const jsonString = JSON.stringify(databaseBackup, null, 2);
+    const blob = new Blob([jsonString], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+
+    // Create temporary download anchor
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `backup_banco_dados_versatil_maker_${dateFormatted}.json`;
+    document.body.appendChild(link);
+    link.click();
+
+    // Cleanup
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    setBackupDownloaded(true);
+    setTimeout(() => setBackupDownloaded(false), 4000);
+  };
+
+  // Total record counter
+  const totalRecords =
+    orders.length +
+    filaments.length +
+    printers.length +
+    productionCards.length +
+    savedCalculations.length +
+    customers.length;
+
   return (
     <div className="mx-auto max-w-xl px-4 py-6 text-slate-100 flex flex-col gap-6">
       {/* Title */}
       <div>
         <div className="flex items-center gap-2.5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600/20 text-blue-400">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600/20 text-blue-400 border border-blue-500/30">
             <Settings className="h-5 w-5" />
           </div>
           <h1 className="text-2xl font-black tracking-tight text-white leading-tight">
@@ -40,8 +136,65 @@ export const SettingsView: React.FC = () => {
           </h1>
         </div>
         <p className="mt-1 text-xs text-slate-400">
-          Dados operacionais da sua loja de impressão 3D e preferências do sistema.
+          Dados operacionais da sua loja de impressão 3D, preferências e backup do sistema.
         </p>
+      </div>
+
+      {/* BACKUP E SEGURANÇA DO BANCO DE DADOS */}
+      <div className="rounded-2xl border border-blue-500/30 bg-gradient-to-br from-[#121828] via-[#0f1d38] to-[#121828] p-5 shadow-lg flex flex-col gap-3 relative overflow-hidden">
+        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-blue-300 flex items-center gap-2">
+            <Database className="h-4 w-4 text-blue-400" /> BACKUP & SEGURANÇA DO BANCO DE DADOS
+          </h3>
+          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-bold text-emerald-300 border border-emerald-500/30">
+            <ShieldCheck className="h-3 w-3" /> Seguro
+          </span>
+        </div>
+
+        <p className="text-xs text-slate-300">
+          Faça o download de um cópia completa de segurança com todas as suas vendas, estoque de filamentos, cadastro de impressoras, fila de produção e clientes em arquivo JSON.
+        </p>
+
+        {/* Database Status Cards */}
+        <div className="grid grid-cols-3 gap-2 py-1 text-xs">
+          <div className="rounded-xl bg-[#090e1a] p-2.5 border border-slate-800">
+            <span className="text-[10px] text-slate-400 block font-semibold">Total Registros</span>
+            <span className="text-base font-black text-blue-400">{totalRecords}</span>
+          </div>
+          <div className="rounded-xl bg-[#090e1a] p-2.5 border border-slate-800">
+            <span className="text-[10px] text-slate-400 block font-semibold">Formato</span>
+            <span className="text-xs font-bold text-emerald-400 flex items-center gap-1 mt-0.5">
+              <FileJson className="h-3.5 w-3.5" /> JSON (.json)
+            </span>
+          </div>
+          <div className="rounded-xl bg-[#090e1a] p-2.5 border border-slate-800">
+            <span className="text-[10px] text-slate-400 block font-semibold">Fila + Vendas</span>
+            <span className="text-base font-black text-purple-400">
+              {productionCards.length + orders.length}
+            </span>
+          </div>
+        </div>
+
+        {backupDownloaded && (
+          <div className="flex items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-950/60 p-3 text-xs font-semibold text-emerald-300 animate-in fade-in duration-200">
+            <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+            <div>
+              <p>Download concluído com sucesso!</p>
+              <p className="text-[10px] text-emerald-400/80 font-normal">
+                Arquivo contendo {totalRecords} registros exportado para sua pasta de Downloads.
+              </p>
+            </div>
+          </div>
+        )}
+
+        <button
+          type="button"
+          onClick={handleDownloadBackup}
+          className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 py-3 text-xs font-bold text-white shadow-md hover:from-blue-500 hover:to-indigo-500 active:scale-98 transition cursor-pointer"
+        >
+          <Download className="h-4 w-4" />
+          <span>Baixar Backup Completo do Banco de Dados (.JSON)</span>
+        </button>
       </div>
 
       <form onSubmit={handleSave} className="flex flex-col gap-4 text-xs">
@@ -147,7 +300,7 @@ export const SettingsView: React.FC = () => {
 
         <button
           type="submit"
-          className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-3 text-sm font-bold text-white shadow-md shadow-blue-600/20 hover:bg-blue-500 transition"
+          className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-3 text-sm font-bold text-white shadow-md shadow-blue-600/20 hover:bg-blue-500 transition cursor-pointer"
         >
           <Save className="h-4 w-4" />
           <span>Salvar Configurações</span>

@@ -34,6 +34,9 @@ import {
   CheckCircle2,
   AlertCircle,
   Calendar,
+  ListOrdered,
+  Activity,
+  Flame,
 } from "lucide-react";
 import { OrderItem, Filament, Printer as PrinterType, ProductionCard } from "../types";
 
@@ -45,7 +48,7 @@ interface VisualMetricsDashboardProps {
   onNavigate?: (view: any) => void;
 }
 
-// 7 Days Mock/Calculated Production Data
+// 7 Days Daily Production Data
 interface DailyProductionData {
   dayName: string;
   dateStr: string;
@@ -68,7 +71,7 @@ export const VisualMetricsDashboard: React.FC<VisualMetricsDashboardProps> = ({
   onNavigate,
 }) => {
   const [metricTab, setMetricTab] = useState<"combined" | "pieces" | "grams" | "hours">("combined");
-  const [activeSection, setActiveSection] = useState<"all" | "production" | "sales">("all");
+  const [activeSection, setActiveSection] = useState<"all" | "production" | "queue" | "sales">("all");
 
   // Calculate dynamic 7-day data based on current context
   const last7DaysData: DailyProductionData[] = useMemo(() => {
@@ -120,7 +123,6 @@ export const VisualMetricsDashboard: React.FC<VisualMetricsDashboardProps> = ({
 
   // Aggregate Sales Metrics
   const totalSalesCount = useMemo(() => {
-    // Total historical sales + current orders
     const baseRecordedSales = 78;
     return baseRecordedSales + orders.length;
   }, [orders]);
@@ -128,7 +130,7 @@ export const VisualMetricsDashboard: React.FC<VisualMetricsDashboardProps> = ({
   const totalSales7Days = useMemo(() => last7DaysData.reduce((sum, d) => sum + d.totalSales, 0), [last7DaysData]);
   const totalRevenue7Days = useMemo(() => last7DaysData.reduce((sum, d) => sum + d.revenue, 0), [last7DaysData]);
 
-  // Channel Distribution Data for Pie Chart
+  // 1. Channel Distribution Data for Recharts
   const salesChannelData = useMemo(() => {
     const mlCount = orders.filter((o) => o.platform === "Mercado Livre").length + 42;
     const shopeeCount = orders.filter((o) => o.platform === "Shopee").length + 28;
@@ -143,12 +145,61 @@ export const VisualMetricsDashboard: React.FC<VisualMetricsDashboardProps> = ({
     ];
   }, [orders]);
 
+  // 2. Production Queue Status Data for Recharts
+  const queueStatusData = useMemo(() => {
+    const aFazer = productionCards.filter((c) => c.status === "a_fazer").length;
+    const imprimindo = productionCards.filter((c) => c.status === "imprimindo").length;
+    const finalizado = productionCards.filter((c) => c.status === "finalizado").length;
+
+    const totalCards = Math.max(1, aFazer + imprimindo + finalizado);
+
+    return [
+      {
+        name: "Na Fila (A Fazer)",
+        count: aFazer,
+        percentage: Math.round((aFazer / totalCards) * 100),
+        color: "#f59e0b", // Amber
+        hours: productionCards.filter((c) => c.status === "a_fazer").reduce((acc, c) => acc + c.printTimeHours, 0),
+        grams: productionCards.filter((c) => c.status === "a_fazer").reduce((acc, c) => acc + c.weightGrams, 0),
+      },
+      {
+        name: "Em Impressão",
+        count: imprimindo,
+        percentage: Math.round((imprimindo / totalCards) * 100),
+        color: "#3b82f6", // Blue
+        hours: productionCards.filter((c) => c.status === "imprimindo").reduce((acc, c) => acc + c.printTimeHours, 0),
+        grams: productionCards.filter((c) => c.status === "imprimindo").reduce((acc, c) => acc + c.weightGrams, 0),
+      },
+      {
+        name: "Finalizados / Prontos",
+        count: finalizado,
+        percentage: Math.round((finalizado / totalCards) * 100),
+        color: "#10b981", // Emerald
+        hours: productionCards.filter((c) => c.status === "finalizado").reduce((acc, c) => acc + c.printTimeHours, 0),
+        grams: productionCards.filter((c) => c.status === "finalizado").reduce((acc, c) => acc + c.weightGrams, 0),
+      },
+    ];
+  }, [productionCards]);
+
+  // Priority Breakdown for Queue
+  const queuePriorityData = useMemo(() => {
+    const urgente = productionCards.filter((c) => c.priority === "urgente").length;
+    const alta = productionCards.filter((c) => c.priority === "alta").length;
+    const normal = productionCards.filter((c) => c.priority === "normal").length;
+
+    return [
+      { name: "Urgente", count: urgente, color: "#ef4444" },
+      { name: "Alta", count: alta, color: "#f97316" },
+      { name: "Normal", count: normal, color: "#3b82f6" },
+    ];
+  }, [productionCards]);
+
   // Machine fleet status
   const activePrintersCount = printers.filter((p) => p.status === "imprimindo").length;
   const printerUtilizationPercent = printers.length > 0 ? Math.round((activePrintersCount / printers.length) * 100) : 0;
 
-  // Custom Chart Tooltip
-  const CustomProductionTooltip = ({ active, payload, label }: any) => {
+  // Custom Chart Tooltips
+  const CustomProductionTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload as DailyProductionData;
       return (
@@ -216,11 +267,31 @@ export const VisualMetricsDashboard: React.FC<VisualMetricsDashboardProps> = ({
     return null;
   };
 
+  const CustomQueueTooltip = ({ active, payload }: any) => {
+    if (active && payload && payload.length) {
+      const item = payload[0].payload;
+      return (
+        <div className="rounded-xl border border-slate-700/80 bg-[#0d1322]/95 p-3 text-xs shadow-2xl backdrop-blur-md">
+          <p className="font-bold text-white border-b border-slate-800 pb-1.5 flex items-center gap-1.5">
+            <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.color }} />
+            {item.name}
+          </p>
+          <div className="mt-2 space-y-1 text-slate-300">
+            <p>Quantidade de Pedidos: <strong className="text-white font-mono">{item.count} un.</strong> ({item.percentage}%)</p>
+            <p>Estimativa de Tempo: <strong className="text-amber-300 font-mono">{item.hours}h</strong></p>
+            <p>Massa de Filamento: <strong className="text-purple-300 font-mono">{item.grams}g</strong></p>
+          </div>
+        </div>
+      );
+    }
+    return null;
+  };
+
   return (
     <div className="flex flex-col gap-5 w-full">
       {/* Header Banner & Section Switcher */}
       <div className="rounded-2xl border border-blue-500/20 bg-gradient-to-r from-[#10172a] via-[#0e1c38] to-[#121828] p-5 shadow-lg relative overflow-hidden">
-        {/* Glow effect */}
+        {/* Glow effects */}
         <div className="absolute -right-10 -top-10 h-36 w-36 rounded-full bg-blue-500/10 blur-3xl pointer-events-none" />
         <div className="absolute -left-10 -bottom-10 h-36 w-36 rounded-full bg-emerald-500/10 blur-3xl pointer-events-none" />
 
@@ -231,19 +302,19 @@ export const VisualMetricsDashboard: React.FC<VisualMetricsDashboardProps> = ({
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
                 Métricas em Tempo Real
               </span>
-              <span className="text-[11px] text-slate-400 font-medium">Últimos 7 dias</span>
+              <span className="text-[11px] text-slate-400 font-medium">Recharts Integrado</span>
             </div>
             <h2 className="mt-2 text-xl sm:text-2xl font-black tracking-tight text-white flex items-center gap-2">
               <BarChart3 className="h-6 w-6 text-blue-400" />
               Painel de Performance 3D
             </h2>
             <p className="mt-0.5 text-xs text-slate-300">
-              Acompanhamento integrado de volume de produção e conversão de vendas.
+              Visualização analítica de vendas por plataforma, status da fila de produção e volume dos últimos 7 dias.
             </p>
           </div>
 
           {/* Section Filter Pills */}
-          <div className="flex items-center bg-[#090d16] p-1 rounded-xl border border-slate-800 self-start sm:self-auto">
+          <div className="flex flex-wrap items-center bg-[#090d16] p-1 rounded-xl border border-slate-800">
             <button
               onClick={() => setActiveSection("all")}
               className={`rounded-lg px-3 py-1.5 text-xs font-bold transition ${
@@ -272,13 +343,23 @@ export const VisualMetricsDashboard: React.FC<VisualMetricsDashboardProps> = ({
                   : "text-slate-400 hover:text-white"
               }`}
             >
-              Vendas & Canais
+              Vendas por Plataforma
+            </button>
+            <button
+              onClick={() => setActiveSection("queue")}
+              className={`rounded-lg px-3 py-1.5 text-xs font-bold transition ${
+                activeSection === "queue"
+                  ? "bg-blue-600 text-white shadow"
+                  : "text-slate-400 hover:text-white"
+              }`}
+            >
+              Fila de Produção
             </button>
           </div>
         </div>
       </div>
 
-      {/* KPI Cards: Total Vendas Realizadas & Total Produção */}
+      {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         {/* 1. Contagem Total de Vendas Realizadas */}
         <div className="relative overflow-hidden rounded-2xl border border-emerald-500/30 bg-gradient-to-br from-[#121828] via-[#0f231e] to-[#0a1614] p-5 shadow-sm">
@@ -306,7 +387,6 @@ export const VisualMetricsDashboard: React.FC<VisualMetricsDashboardProps> = ({
             </div>
           </div>
 
-          {/* Quick breakdown mini-bar */}
           <div className="mt-4 pt-3 border-t border-emerald-500/15 flex items-center justify-between text-[11px]">
             <span className="text-slate-400">Receita 7d:</span>
             <span className="font-bold text-emerald-300">R$ {totalRevenue7Days.toFixed(2)}</span>
@@ -342,45 +422,46 @@ export const VisualMetricsDashboard: React.FC<VisualMetricsDashboardProps> = ({
           </div>
         </div>
 
-        {/* 3. Consumo de Filamento (7 Dias) */}
-        <div className="relative overflow-hidden rounded-2xl border border-purple-500/30 bg-gradient-to-br from-[#121828] via-[#1c122e] to-[#110b1e] p-5 shadow-sm">
+        {/* 3. Status da Fila de Produção */}
+        <div className="relative overflow-hidden rounded-2xl border border-amber-500/30 bg-gradient-to-br from-[#121828] via-[#241a10] to-[#160f08] p-5 shadow-sm">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold tracking-wide uppercase text-purple-300 flex items-center gap-1.5">
-              <Layers className="h-4 w-4 text-purple-400" />
-              Filamento Total (7d)
+            <span className="text-xs font-bold tracking-wide uppercase text-amber-300 flex items-center gap-1.5">
+              <ListOrdered className="h-4 w-4 text-amber-400" />
+              Fila de Produção
             </span>
-            <span className="text-[10px] font-semibold text-purple-300">
-              {(totalGrams7Days / 1000).toFixed(2)} kg
+            <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-[10px] font-bold text-amber-300 border border-amber-500/30">
+              {productionCards.length} cartões
             </span>
           </div>
 
           <div className="mt-3 flex items-baseline justify-between">
             <div>
               <p className="text-3xl sm:text-4xl font-black tracking-tight text-white">
-                {totalGrams7Days.toLocaleString("pt-BR")} <span className="text-lg font-bold text-purple-400">g</span>
+                {productionCards.filter((c) => c.status === "a_fazer").length}{" "}
+                <span className="text-lg font-bold text-amber-400">a fazer</span>
               </p>
-              <p className="text-[11px] text-purple-300/80 font-medium mt-0.5">
-                Média de {(totalGrams7Days / 7).toFixed(0)}g por dia
+              <p className="text-[11px] text-amber-300/80 font-medium mt-0.5">
+                {productionCards.filter((c) => c.status === "imprimindo").length} em impressão nas máquinas
               </p>
             </div>
           </div>
 
-          <div className="mt-4 pt-3 border-t border-purple-500/15 flex items-center justify-between text-[11px]">
-            <span className="text-slate-400">Estoque disponível:</span>
-            <span className="font-bold text-purple-300">
-              {filaments.reduce((acc, f) => acc + f.weightRemainingGrams, 0)}g
+          <div className="mt-4 pt-3 border-t border-amber-500/15 flex items-center justify-between text-[11px]">
+            <span className="text-slate-400">Concluídos na fila:</span>
+            <span className="font-bold text-emerald-300">
+              {productionCards.filter((c) => c.status === "finalizado").length} un.
             </span>
           </div>
         </div>
 
         {/* 4. Horas de Máquina & Utilização */}
-        <div className="relative overflow-hidden rounded-2xl border border-amber-500/30 bg-gradient-to-br from-[#121828] via-[#241a10] to-[#160f08] p-5 shadow-sm">
+        <div className="relative overflow-hidden rounded-2xl border border-purple-500/30 bg-gradient-to-br from-[#121828] via-[#1c122e] to-[#110b1e] p-5 shadow-sm">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold tracking-wide uppercase text-amber-300 flex items-center gap-1.5">
-              <Printer className="h-4 w-4 text-amber-400" />
+            <span className="text-xs font-bold tracking-wide uppercase text-purple-300 flex items-center gap-1.5">
+              <Printer className="h-4 w-4 text-purple-400" />
               Parque de Impressão
             </span>
-            <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-[10px] font-bold text-amber-300 border border-amber-500/30">
+            <span className="rounded-full bg-purple-500/20 px-2 py-0.5 text-[10px] font-bold text-purple-300 border border-purple-500/30">
               {printerUtilizationPercent}% Ativo
             </span>
           </div>
@@ -388,24 +469,24 @@ export const VisualMetricsDashboard: React.FC<VisualMetricsDashboardProps> = ({
           <div className="mt-3 flex items-baseline justify-between">
             <div>
               <p className="text-3xl sm:text-4xl font-black tracking-tight text-white">
-                {totalHours7Days.toFixed(1)} <span className="text-lg font-bold text-amber-400">h</span>
+                {totalHours7Days.toFixed(1)} <span className="text-lg font-bold text-purple-400">h</span>
               </p>
-              <p className="text-[11px] text-amber-300/80 font-medium mt-0.5">
+              <p className="text-[11px] text-purple-300/80 font-medium mt-0.5">
                 {activePrintersCount} de {printers.length} impressoras em operação
               </p>
             </div>
           </div>
 
-          <div className="mt-4 pt-3 border-t border-amber-500/15 flex items-center justify-between text-[11px]">
-            <span className="text-slate-400">Fila pendente:</span>
-            <span className="font-bold text-amber-300">
-              {productionCards.filter((c) => c.status === "a_fazer").length} pedidos
+          <div className="mt-4 pt-3 border-t border-purple-500/15 flex items-center justify-between text-[11px]">
+            <span className="text-slate-400">Estoque de Filamento:</span>
+            <span className="font-bold text-purple-300">
+              {filaments.reduce((acc, f) => acc + f.weightRemainingGrams, 0)}g
             </span>
           </div>
         </div>
       </div>
 
-      {/* MAIN CHART 1: Volume de Produção por Dia nos Últimos 7 Dias */}
+      {/* CHART 1: Volume de Produção por Dia nos Últimos 7 Dias */}
       {(activeSection === "all" || activeSection === "production") && (
         <div className="rounded-2xl border border-slate-800 bg-[#121828] p-5 shadow-sm">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-4">
@@ -419,7 +500,7 @@ export const VisualMetricsDashboard: React.FC<VisualMetricsDashboardProps> = ({
                 </h3>
               </div>
               <p className="mt-1 text-xs text-slate-400">
-                Acompanhe o rendimento diário de peças, filamento e horas de máquina.
+                Rendimento diário de peças impressas, consumo de filamento e horas de impressão.
               </p>
             </div>
 
@@ -468,7 +549,6 @@ export const VisualMetricsDashboard: React.FC<VisualMetricsDashboardProps> = ({
             </div>
           </div>
 
-          {/* Quick Metrics Strip */}
           <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
             <div className="rounded-xl bg-[#0b101c] p-2.5 border border-slate-800/60">
               <span className="text-[10px] text-slate-400 uppercase font-bold">Total Peças (7d)</span>
@@ -488,7 +568,6 @@ export const VisualMetricsDashboard: React.FC<VisualMetricsDashboardProps> = ({
             </div>
           </div>
 
-          {/* Recharts Chart Area */}
           <div className="mt-5 h-72 w-full">
             <ResponsiveContainer width="100%" height="100%">
               {metricTab === "combined" ? (
@@ -621,10 +700,10 @@ export const VisualMetricsDashboard: React.FC<VisualMetricsDashboardProps> = ({
         </div>
       )}
 
-      {/* MAIN CHART 2: Vendas Realizadas & Distribuição de Canais */}
+      {/* CHART 2: Volume de Vendas por Plataforma (Recharts Bar & Donut) */}
       {(activeSection === "all" || activeSection === "sales") && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {/* Vendas Diárias por Canal (Últimos 7 Dias) */}
+          {/* Vendas Diárias por Plataforma */}
           <div className="lg:col-span-2 rounded-2xl border border-slate-800 bg-[#121828] p-5 shadow-sm flex flex-col justify-between">
             <div>
               <div className="flex items-center justify-between">
@@ -634,10 +713,10 @@ export const VisualMetricsDashboard: React.FC<VisualMetricsDashboardProps> = ({
                   </div>
                   <div>
                     <h3 className="text-base font-bold text-white">
-                      Vendas Realizadas por Canal (7 Dias)
+                      Volume de Vendas por Plataforma (Recharts)
                     </h3>
                     <p className="text-xs text-slate-400">
-                      Comparativo diário entre Mercado Livre, Shopee e Vendas Diretas.
+                      Volume de vendas diário discriminado por Mercado Livre, Shopee e Vendas Diretas.
                     </p>
                   </div>
                 </div>
@@ -646,7 +725,7 @@ export const VisualMetricsDashboard: React.FC<VisualMetricsDashboardProps> = ({
                 </span>
               </div>
 
-              {/* Stacked Bar Chart */}
+              {/* Stacked Bar Chart Recharts */}
               <div className="mt-5 h-64 w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={last7DaysData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
@@ -673,22 +752,22 @@ export const VisualMetricsDashboard: React.FC<VisualMetricsDashboardProps> = ({
             </div>
 
             <div className="mt-3 pt-3 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
-              <span>Total faturado no período:</span>
+              <span>Faturamento no período:</span>
               <strong className="text-emerald-400 font-bold text-sm">R$ {totalRevenue7Days.toFixed(2)}</strong>
             </div>
           </div>
 
-          {/* Donut Chart: Distribuição de Canais */}
+          {/* Donut Chart: Participação de Canais */}
           <div className="rounded-2xl border border-slate-800 bg-[#121828] p-5 shadow-sm flex flex-col justify-between">
             <div>
               <div className="flex items-center gap-2">
                 <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-purple-600/20 text-purple-400">
                   <PieChartIcon className="h-4 w-4" />
                 </div>
-                <h3 className="text-base font-bold text-white">Canais de Venda</h3>
+                <h3 className="text-base font-bold text-white">Participação de Plataformas</h3>
               </div>
               <p className="mt-1 text-xs text-slate-400">
-                Participação de cada plataforma no total acumulado.
+                Divisão percentual das vendas acumuladas por canal.
               </p>
 
               <div className="mt-2 h-44 w-full relative">
@@ -714,14 +793,12 @@ export const VisualMetricsDashboard: React.FC<VisualMetricsDashboardProps> = ({
                   </PieChart>
                 </ResponsiveContainer>
 
-                {/* Center text */}
                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                   <span className="text-xl font-black text-white">{totalSalesCount}</span>
                   <span className="text-[10px] text-slate-400 font-medium uppercase">Vendas</span>
                 </div>
               </div>
 
-              {/* Legend with percentages */}
               <div className="mt-3 space-y-2">
                 {salesChannelData.map((item) => (
                   <div key={item.name} className="flex items-center justify-between text-xs bg-[#0c1220] p-2 rounded-xl">
@@ -741,9 +818,9 @@ export const VisualMetricsDashboard: React.FC<VisualMetricsDashboardProps> = ({
             {onNavigate && (
               <button
                 onClick={() => onNavigate("vendas")}
-                className="mt-4 flex w-full items-center justify-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800/80 py-2.5 text-xs font-bold text-white transition hover:bg-slate-700"
+                className="mt-4 flex w-full items-center justify-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800/80 py-2.5 text-xs font-bold text-white transition hover:bg-slate-700 cursor-pointer"
               >
-                <span>Acessar Gestão Completa de Vendas</span>
+                <span>Gestão Completa de Vendas</span>
                 <ChevronRight className="h-3.5 w-3.5" />
               </button>
             )}
@@ -751,7 +828,141 @@ export const VisualMetricsDashboard: React.FC<VisualMetricsDashboardProps> = ({
         </div>
       )}
 
-      {/* Production & Sales Strategic Insights */}
+      {/* CHART 3: Status Atual da Fila de Produção (Recharts) */}
+      {(activeSection === "all" || activeSection === "queue") && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          {/* Status da Fila de Produção Bar Chart */}
+          <div className="lg:col-span-2 rounded-2xl border border-amber-500/20 bg-[#121828] p-5 shadow-sm flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-600/20 text-amber-400 border border-amber-500/30">
+                    <ListOrdered className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-white">
+                      Status Atual da Fila de Produção (Recharts)
+                    </h3>
+                    <p className="text-xs text-slate-400">
+                      Distribuição em tempo real dos pedidos entre Na Fila, Em Impressão e Finalizados.
+                    </p>
+                  </div>
+                </div>
+                <span className="rounded-full bg-amber-500/10 px-2.5 py-1 text-xs font-bold text-amber-300 border border-amber-500/20">
+                  {productionCards.length} cartões no Kanban
+                </span>
+              </div>
+
+              {/* Recharts Horizontal or Vertical Bar Chart for Queue Status */}
+              <div className="mt-5 h-60 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={queueStatusData} layout="vertical" margin={{ top: 10, right: 20, left: 20, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" horizontal={false} />
+                    <XAxis type="number" stroke="#64748b" fontSize={11} tickLine={false} unit=" un" />
+                    <YAxis type="category" dataKey="name" stroke="#94a3b8" fontSize={11} tickLine={false} width={130} />
+                    <Tooltip content={<CustomQueueTooltip />} />
+                    <Bar dataKey="count" name="Quantidade de Pedidos" radius={[0, 6, 6, 0]} maxBarSize={32}>
+                      {queueStatusData.map((entry, index) => (
+                        <Cell key={`cell-queue-${index}`} fill={entry.color} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* Queue Metrics Summary Strip */}
+            <div className="mt-3 pt-3 border-t border-slate-800 grid grid-cols-3 gap-2 text-xs text-slate-300">
+              <div className="rounded-xl bg-[#090d16] p-2 border border-slate-800/80">
+                <span className="text-[10px] text-slate-400 uppercase block font-bold">Tempo Restante</span>
+                <span className="font-mono text-amber-300 font-bold text-sm">
+                  {queueStatusData.find((q) => q.name.includes("Fila"))?.hours.toFixed(1) || 0}h
+                </span>
+              </div>
+              <div className="rounded-xl bg-[#090d16] p-2 border border-slate-800/80">
+                <span className="text-[10px] text-slate-400 uppercase block font-bold">Filamento Fila</span>
+                <span className="font-mono text-purple-300 font-bold text-sm">
+                  {queueStatusData.find((q) => q.name.includes("Fila"))?.grams || 0}g
+                </span>
+              </div>
+              <div className="rounded-xl bg-[#090d16] p-2 border border-slate-800/80">
+                <span className="text-[10px] text-slate-400 uppercase block font-bold">Impressoras Ativas</span>
+                <span className="font-mono text-blue-400 font-bold text-sm">
+                  {activePrintersCount} / {printers.length}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Donut Chart: Prioridades na Fila */}
+          <div className="rounded-2xl border border-slate-800 bg-[#121828] p-5 shadow-sm flex flex-col justify-between">
+            <div>
+              <div className="flex items-center gap-2">
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-600/20 text-red-400">
+                  <Flame className="h-4 w-4" />
+                </div>
+                <h3 className="text-base font-bold text-white">Nível de Prioridade</h3>
+              </div>
+              <p className="mt-1 text-xs text-slate-400">
+                Classificação dos pedidos (Urgente, Alta, Normal).
+              </p>
+
+              <div className="mt-2 h-44 w-full relative">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={queuePriorityData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={45}
+                      outerRadius={68}
+                      paddingAngle={4}
+                      dataKey="count"
+                    >
+                      {queuePriorityData.map((entry, index) => (
+                        <Cell key={`cell-priority-${index}`} fill={entry.color} stroke="#121828" strokeWidth={2} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      formatter={(value: any, name: any) => [`${value} pedidos`, name]}
+                      contentStyle={{ backgroundColor: "#0d1322", borderColor: "#334155", borderRadius: "10px", fontSize: "12px", color: "#fff" }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                  <span className="text-xl font-black text-white">{productionCards.length}</span>
+                  <span className="text-[10px] text-slate-400 font-medium uppercase">Pedidos</span>
+                </div>
+              </div>
+
+              <div className="mt-3 space-y-2">
+                {queuePriorityData.map((item) => (
+                  <div key={item.name} className="flex items-center justify-between text-xs bg-[#0c1220] p-2 rounded-xl">
+                    <div className="flex items-center gap-2">
+                      <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.color }} />
+                      <span className="font-semibold text-slate-300">{item.name}</span>
+                    </div>
+                    <span className="font-mono text-white font-bold">{item.count} pedidos</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {onNavigate && (
+              <button
+                onClick={() => onNavigate("fila-producao")}
+                className="mt-4 flex w-full items-center justify-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800/80 py-2.5 text-xs font-bold text-white transition hover:bg-slate-700 cursor-pointer"
+              >
+                <span>Acessar Fila de Produção (Kanban)</span>
+                <ChevronRight className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Strategic Insights Footer */}
       <div className="rounded-2xl border border-slate-800 bg-[#0d1322] p-4 text-xs">
         <div className="flex items-center gap-2 text-slate-300 font-bold mb-2">
           <Sparkles className="h-4 w-4 text-blue-400" />
@@ -770,18 +981,18 @@ export const VisualMetricsDashboard: React.FC<VisualMetricsDashboardProps> = ({
           <div className="flex items-start gap-2 rounded-xl bg-[#121828] p-3 border border-slate-800/80">
             <Award className="h-4 w-4 text-yellow-400 shrink-0 mt-0.5" />
             <div>
-              <p className="font-bold text-slate-100">Mercado Livre é o Top Canal</p>
+              <p className="font-bold text-slate-100">Mercado Livre Lidera Vendas</p>
               <p className="text-[11px] text-slate-400 mt-0.5">
-                Representa a maior fatia de receita e maior ticket médio por pedido.
+                Representa a maior fatia de faturamento e volume de pedidos confirmados.
               </p>
             </div>
           </div>
           <div className="flex items-start gap-2 rounded-xl bg-[#121828] p-3 border border-slate-800/80">
             <Zap className="h-4 w-4 text-blue-400 shrink-0 mt-0.5" />
             <div>
-              <p className="font-bold text-slate-100">Capacidade Disponível</p>
+              <p className="font-bold text-slate-100">Capacidade Operacional</p>
               <p className="text-[11px] text-slate-400 mt-0.5">
-                Potencial para absorver mais {Math.max(1, printers.length - activePrintersCount)} fila(s) de impressão simultânea.
+                {activePrintersCount} impressora(s) operando ativamente. {printers.length - activePrintersCount} livre(s) para novos trabalhos.
               </p>
             </div>
           </div>
