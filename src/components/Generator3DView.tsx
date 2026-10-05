@@ -21,6 +21,20 @@ export const Generator3DView: React.FC<Generator3DViewProps> = ({ onSendToQueue 
   const [wallThickness, setWallThickness] = useState(2);
   const [rotationAngle, setRotationAngle] = useState(25);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [downloadError, setDownloadError] = useState("");
+
+  const handleDownload = async () => {
+    setIsGenerating(true);
+    setDownloadError("");
+    try {
+      const { downloadModelStl } = await import("../utils/modelStl");
+      downloadModelStl(modelType, customText, scaleFactor, wallThickness);
+    } catch {
+      setDownloadError("Não foi possível gerar o STL. Tente novamente.");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
 
   // Estimates based on parameters
   const estimatedWeight = Math.round(
@@ -39,7 +53,7 @@ export const Generator3DView: React.FC<Generator3DViewProps> = ({ onSendToQueue 
         : modelType === "placa"
         ? `Placa 3D "${customText}"`
         : modelType === "suporte"
-        ? "Suporte Articulado de Mesa"
+        ? "Suporte de Mesa"
         : `Chaveiro Personalizado "${customText}"`
     }`;
     onSendToQueue(title, estimatedWeight, Number(estimatedTime));
@@ -66,7 +80,7 @@ export const Generator3DView: React.FC<Generator3DViewProps> = ({ onSendToQueue 
       <div className="relative overflow-hidden rounded-2xl border border-indigo-500/30 bg-gradient-to-b from-[#0e1428] via-[#090d1a] to-[#060810] p-6 text-center shadow-xl">
         <div className="absolute top-3 left-3 flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-indigo-400">
           <Layers className="h-3.5 w-3.5" />
-          <span>Viewport 3D em Tempo Real</span>
+          <span>Prévia ilustrativa do modelo</span>
         </div>
 
         {/* CSS 3D Model Representation */}
@@ -190,6 +204,7 @@ export const Generator3DView: React.FC<Generator3DViewProps> = ({ onSendToQueue 
           />
         </div>
 
+        <p className="text-[11px] text-slate-400">Dimensões do STL em milímetros. Peso e tempo são estimativas; confirme no seu fatiador.</p>
         {/* Estimates Banner */}
         <div className="grid grid-cols-2 gap-3 rounded-xl bg-[#0c1220] p-3 text-xs border border-slate-800">
           <div>
@@ -203,13 +218,15 @@ export const Generator3DView: React.FC<Generator3DViewProps> = ({ onSendToQueue 
         </div>
 
         {/* Actions */}
+        {downloadError && <p role="alert" className="text-red-300">{downloadError}</p>}
         <div className="grid grid-cols-2 gap-2 mt-2">
           <button
-            onClick={() => alert("Arquivo STL exportado e pronto para fatiar no Bambu Studio ou Cura!")}
+            onClick={handleDownload}
+            disabled={isGenerating}
             className="flex items-center justify-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800 py-3 text-xs font-bold text-slate-200 hover:bg-slate-700 transition"
           >
             <Download className="h-4 w-4" />
-            <span>Baixar STL</span>
+            <span>{isGenerating ? "Gerando STL..." : "Baixar STL"}</span>
           </button>
 
           <button

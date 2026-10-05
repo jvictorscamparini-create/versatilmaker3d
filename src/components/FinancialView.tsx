@@ -1,4 +1,6 @@
 import React, { useState } from "react";
+import { usePersistentState } from "../hooks/usePersistentState";
+import { inMonth, monthNames } from "../utils/dates";
 import {
   DollarSign,
   TrendingUp,
@@ -29,16 +31,16 @@ interface FinancialViewProps {
   orders: OrderItem[];
 }
 
-export const FinancialView: React.FC<FinancialViewProps> = ({ orders }) => {
-  const [selectedMonth, setSelectedMonth] = useState<string>("Setembro");
-  const [selectedYear, setSelectedYear] = useState<number>(2026);
+export const FinancialView: React.FC<FinancialViewProps> = ({ orders: allOrders }) => {
+  const [selectedMonth, setSelectedMonth] = useState<string>(monthNames[new Date().getMonth()]);
+  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const [workshopName, setWorkshopName] = useState<string>("Oficina 3D Maker & Prototipagem");
   const [showAddExpense, setShowAddExpense] = useState(false);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [notification, setNotification] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"todos" | "vendas" | "despesas">("todos");
 
-  const [expenses, setExpenses] = useState<ExpenseItem[]>([
+  const [allExpenses, setExpenses] = usePersistentState<ExpenseItem[]>("expenses", [
     { id: "e1", desc: "3x Rolos Filamento PLA Silk Voolt3D", category: "Insumos", amount: 390.0, date: "12/09/2026" },
     { id: "e2", desc: "Lote 50 Caixas de Envio Papelão Reforçado", category: "Embalagens", amount: 125.0, date: "10/09/2026" },
     { id: "e3", desc: "Conta de Energia Elétrica (Oficina)", category: "Energia", amount: 184.5, date: "05/09/2026" },
@@ -50,6 +52,10 @@ export const FinancialView: React.FC<FinancialViewProps> = ({ orders }) => {
   const [newDesc, setNewDesc] = useState("");
   const [newCat, setNewCat] = useState("Insumos");
   const [newAmount, setNewAmount] = useState(90);
+
+  const month = monthNames.indexOf(selectedMonth);
+  const orders = allOrders.filter(order => inMonth(order.date,month,selectedYear));
+  const expenses = allExpenses.filter(expense => inMonth(expense.date,month,selectedYear));
 
   // Financial Calculations
   const grossRevenue = orders.reduce((sum, o) => sum + o.totalPrice, 0);
@@ -83,14 +89,14 @@ export const FinancialView: React.FC<FinancialViewProps> = ({ orders }) => {
       date: new Date().toLocaleDateString("pt-BR"),
     };
 
-    setExpenses([newExpense, ...expenses]);
+    setExpenses((list) => [newExpense, ...list]);
     setNewDesc("");
     setShowAddExpense(false);
     showToast("Despesa adicionada com sucesso!");
   };
 
   const handleDeleteExpense = (id: string) => {
-    setExpenses(expenses.filter((e) => e.id !== id));
+    setExpenses((list) => list.filter((expense) => expense.id !== id));
     showToast("Despesa removida.");
   };
 
@@ -139,7 +145,7 @@ export const FinancialView: React.FC<FinancialViewProps> = ({ orders }) => {
             </h1>
           </div>
           <p className="mt-1 text-xs text-slate-400">
-            Controle de lucros líquidos reais, taxas de marketplaces e exportação de relatórios contábeis em PDF.
+            Receitas e despesas do mês selecionado, com taxas estimadas em 17,5% nas vendas de marketplace. Confira as taxas reais antes de usar o relatório.
           </p>
         </div>
 
@@ -167,7 +173,7 @@ export const FinancialView: React.FC<FinancialViewProps> = ({ orders }) => {
               <option value="Dezembro" className="bg-slate-900">Dezembro</option>
             </select>
             <span className="mx-1 text-slate-500">/</span>
-            <span className="font-bold text-slate-300">{selectedYear}</span>
+            <input aria-label="Ano do relatório" type="number" min="2000" max="2100" value={selectedYear} onChange={(event) => setSelectedYear(Number(event.target.value))} className="w-16 bg-transparent font-bold text-slate-300" />
           </div>
 
           {/* jsPDF Monthly Report Generator Button */}
@@ -543,8 +549,8 @@ export const FinancialView: React.FC<FinancialViewProps> = ({ orders }) => {
                   <label className="text-xs font-semibold text-slate-300">Valor (R$)</label>
                   <input
                     type="number"
-                    step={0.5}
-                    min={0.1}
+                    step={0.01}
+                    min={0.01}
                     value={newAmount}
                     onChange={(e) => setNewAmount(Number(e.target.value))}
                     className="mt-1 w-full rounded-xl border border-slate-800 bg-[#141b2d] px-3 py-2 text-xs text-white focus:border-blue-500 focus:outline-none"

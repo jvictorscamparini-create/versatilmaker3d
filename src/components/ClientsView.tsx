@@ -44,9 +44,9 @@ export const ClientsView: React.FC<ClientsViewProps> = ({ customers, onAddCustom
       phone,
       email,
       city,
-      totalOrders: 1,
-      totalSpent: 45,
-      lastOrderDate: new Date().toLocaleDateString("pt-BR"),
+      totalOrders: 0,
+      totalSpent: 0,
+      lastOrderDate: "",
       notes,
     });
 

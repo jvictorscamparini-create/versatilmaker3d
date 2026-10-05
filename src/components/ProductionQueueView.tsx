@@ -430,8 +430,8 @@ export const ProductionQueueView: React.FC<ProductionQueueViewProps> = ({
                   <label className="text-xs font-semibold text-slate-300">Tempo de Impressão (h)</label>
                   <input
                     type="number"
-                    step={0.5}
-                    min={0.2}
+                    step={0.1}
+                    min={0.1}
                     value={newPrintTimeHours}
                     onChange={(e) => setNewPrintTimeHours(Number(e.target.value))}
                     className="mt-1 w-full rounded-xl border border-slate-800 bg-[#141b2d] px-3 py-2 text-xs text-white focus:border-blue-500 focus:outline-none"

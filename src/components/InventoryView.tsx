@@ -390,7 +390,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                   <input
                     type="number"
                     min={0}
-                    step={0.5}
+                    step={0.01}
                     value={pricePerSpool}
                     onChange={(e) => setPricePerSpool(Number(e.target.value))}
                     className="mt-1 w-full rounded-xl border border-slate-800 bg-[#141b2d] px-3 py-2 text-xs text-white focus:border-blue-500 focus:outline-none"

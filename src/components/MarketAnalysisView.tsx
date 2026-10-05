@@ -16,13 +16,16 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { MarketAnalysisItem } from "../types";
+import { usePersistentState } from "../hooks/usePersistentState";
 
 export const MarketAnalysisView: React.FC = () => {
   const [platform, setPlatform] = useState<"Mercado Livre" | "Shopee">("Mercado Livre");
   const [creditsUsed, setCreditsUsed] = useState(0);
+  const [resultSource, setResultSource] = useState<string>("");
+  const [requestError, setRequestError] = useState("");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [showSavedList, setShowSavedList] = useState(false);
-  const [showTutorialVideo, setShowTutorialVideo] = useState(false);
+  const [savedAnalyses, setSavedAnalyses] = usePersistentState<Array<{id: string; title: string; date: string; source: string; result: MarketAnalysisItem["result"]}>>("marketAnalyses", []);
   const [analysisResult, setAnalysisResult] = useState<MarketAnalysisItem["result"] | null>(null);
 
   // Form states for user and competitor
@@ -40,6 +43,7 @@ export const MarketAnalysisView: React.FC = () => {
 
   const handleRunAnalysis = async () => {
     setIsAnalyzing(true);
+    setRequestError("");
     try {
       const response = await fetch("/api/market-analysis/compare", {
         method: "POST",
@@ -64,44 +68,24 @@ export const MarketAnalysisView: React.FC = () => {
       });
 
       const resData = await response.json();
+      if (!response.ok || !resData.success) throw new Error(resData.error || "Não foi possível analisar os anúncios.");
+      setResultSource(resData.source || "");
       if (resData.data) {
         setAnalysisResult(resData.data);
-        setCreditsUsed((prev) => Math.min(10, prev + 2));
+        setCreditsUsed((prev) => prev + 1);
+        setSavedAnalyses((previous) => [{ id: crypto.randomUUID(), title: userTitle, date: new Date().toLocaleString("pt-BR"), source: resData.source || "local", result: resData.data }, ...previous].slice(0,50));
       }
     } catch (err) {
-      console.error(err);
+      setRequestError(err instanceof Error ? err.message : "Não foi possível analisar os anúncios.");
     } finally {
       setIsAnalyzing(false);
     }
   };
 
-  const handleDownloadExtension = () => {
-    // Generate a simple simulated extension manifest/guide download
-    const blob = new Blob(
-      [
-        JSON.stringify(
-          {
-            name: "MakerFlow 3D Marketplace Extension",
-            version: "1.0.0",
-            description: "Capture anúncios da Shopee e Mercado Livre com 1 clique.",
-            permissions: ["activeTab", "storage"],
-          },
-          null,
-          2
-        ),
-      ],
-      { type: "application/json" }
-    );
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "makerflow-extension.json";
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
   return (
     <div className="mx-auto max-w-xl px-4 py-6 text-slate-100 flex flex-col gap-6">
+      {requestError && <p role="alert" className="rounded-xl bg-red-950/40 p-3 text-xs text-red-200">{requestError}</p>}
+      {resultSource === "local" && <p role="status" className="rounded-xl bg-amber-950/40 p-3 text-xs text-amber-200">Resultado de modelo local, sem consulta à IA ou aos marketplaces. Revise preços, especificações e sugestões antes de usar.</p>}
       {/* Title & Subtitle (Screenshot 23) */}
       <div className="text-center sm:text-left">
         <div className="flex items-center justify-center sm:justify-start gap-2.5">
@@ -158,25 +142,25 @@ export const MarketAnalysisView: React.FC = () => {
             <span>Análises Salvas</span>
           </button>
 
-          <button
-            onClick={handleDownloadExtension}
-            className="flex items-center gap-1.5 rounded-xl border border-slate-800 bg-[#121828] px-3 py-2 text-xs font-semibold text-slate-300 hover:bg-slate-800 transition"
-          >
-            <Download className="h-3.5 w-3.5" />
-            <span>Baixar Extensão</span>
-          </button>
+
         </div>
 
         <div className="text-right">
           <div className="flex items-center gap-1 text-xs font-bold text-amber-400">
             <Zap className="h-3.5 w-3.5 fill-amber-400" />
-            <span>Usados: {creditsUsed}/10</span>
+            <span>Análises: {creditsUsed}</span>
           </div>
           <span className="text-[10px] font-extrabold tracking-widest text-slate-400">
-            PLANO TRIAL
+            NESTA SESSÃO
           </span>
         </div>
       </div>
+
+      {showSavedList && <section aria-label="Análises salvas" className="rounded-2xl border border-slate-800 bg-[#121828] p-4 flex flex-col gap-2">
+        <h2 className="font-bold">Análises salvas neste navegador</h2>
+        {savedAnalyses.length === 0 && <p className="text-xs text-slate-400">Execute uma análise para salvá-la automaticamente.</p>}
+        {savedAnalyses.map(item => <button key={item.id} className="rounded-lg bg-slate-800 p-3 text-left text-xs" onClick={() => { setAnalysisResult(item.result); setResultSource(item.source); }}><span className="font-bold">{item.title}</span> • {item.date}</button>)}
+      </section>}
 
       {/* SEU ANÚNCIO (Screenshot 23) */}
       <div className="rounded-2xl border border-slate-800 bg-[#121828] p-5 shadow-sm">
@@ -381,123 +365,15 @@ export const MarketAnalysisView: React.FC = () => {
         </div>
       )}
 
-      {/* Tutorial: COMO FAZER UMA ANÁLISE DE MERCADO? (Screenshots 24, 25, 26) */}
-      <div className="rounded-2xl border border-slate-800 bg-[#121828] p-5 shadow-sm">
-        <div className="flex items-center gap-2 pb-4 border-b border-slate-800/80">
-          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-800 text-xs font-bold text-slate-300">
-            ?
-          </span>
-          <h2 className="text-xs font-extrabold uppercase tracking-wider text-slate-300">
-            COMO FAZER UMA ANÁLISE DE MERCADO?
-          </h2>
-        </div>
-
-        {/* 5 Steps (Screenshots 25 & 26) */}
-        <div className="mt-4 flex flex-col gap-3">
-          {/* Step 1 */}
-          <div className="flex items-start gap-3 rounded-xl bg-[#0d1320] p-3 text-xs">
-            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-blue-600 font-bold text-white text-xs">
-              1
-            </span>
-            <div>
-              <h4 className="font-bold text-white">Download da Extensão</h4>
-              <p className="mt-0.5 text-[11px] text-slate-400 leading-relaxed">
-                Baixe o arquivo clicando no botão Baixar Extensão no topo da página.
-              </p>
-            </div>
-          </div>
-
-          {/* Step 2 */}
-          <div className="flex items-start gap-3 rounded-xl bg-[#0d1320] p-3 text-xs">
-            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-blue-600 font-bold text-white text-xs">
-              2
-            </span>
-            <div>
-              <h4 className="font-bold text-white">Ativação no Navegador</h4>
-              <p className="mt-0.5 text-[11px] text-slate-400 leading-relaxed">
-                Acesse chrome://extensions, ative o Modo do Desenvolvedor e carregue a pasta extraída.
-              </p>
-            </div>
-          </div>
-
-          {/* Step 3 */}
-          <div className="flex items-start gap-3 rounded-xl bg-[#0d1320] p-3 text-xs">
-            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-blue-600 font-bold text-white text-xs">
-              3
-            </span>
-            <div>
-              <h4 className="font-bold text-white">Selecione seu Produto</h4>
-              <p className="mt-0.5 text-[11px] text-slate-400 leading-relaxed">
-                Acesse a página do seu produto na Shopee/ML e clique em Sincronizar meu Anúncio na extensão.
-              </p>
-            </div>
-          </div>
-
-          {/* Step 4 */}
-          <div className="flex items-start gap-3 rounded-xl bg-[#0d1320] p-3 text-xs">
-            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-blue-600 font-bold text-white text-xs">
-              4
-            </span>
-            <div>
-              <h4 className="font-bold text-white">Mapeie o Concorrente</h4>
-              <p className="mt-0.5 text-[11px] text-slate-400 leading-relaxed">
-                Vá até o produto concorrente na Shopee/ML e clique em Analisar com MakerFlow.
-              </p>
-            </div>
-          </div>
-
-          {/* Step 5 */}
-          <div className="flex items-start gap-3 rounded-xl bg-[#0d1320] p-3 text-xs">
-            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-blue-600 font-bold text-white text-xs">
-              5
-            </span>
-            <div>
-              <h4 className="font-bold text-white">Finalize a Análise</h4>
-              <p className="mt-0.5 text-[11px] text-slate-400 leading-relaxed">
-                Volte ao sistema e clique em Analisar Mercado Agora para ver todos os detalhes e insights.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* TUTORIAL ANÁLISE DE MERCADO Video Player (Screenshot 26) */}
-        <div className="mt-6 border-t border-slate-800/80 pt-4">
-          <span className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400 block text-center mb-3">
-            TUTORIAL ANÁLISE DE MERCADO
-          </span>
-
-          <div className="relative overflow-hidden rounded-2xl border border-slate-800 bg-[#090d18] aspect-video flex flex-col justify-between p-4">
-            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent pointer-events-none" />
-
-            <div className="relative z-10 flex justify-end">
-              <span className="rounded bg-blue-600/80 px-2 py-0.5 text-[10px] font-bold text-white">
-                HD 1080p
-              </span>
-            </div>
-
-            {/* Big Play Button in Center */}
-            <div className="relative z-10 flex items-center justify-center my-auto">
-              <button
-                onClick={() => setShowTutorialVideo(!showTutorialVideo)}
-                aria-label="Assistir tutorial da análise de mercado"
-                className="flex h-14 w-14 items-center justify-center rounded-full bg-white text-slate-950 shadow-xl hover:scale-105 active:scale-95 transition"
-              >
-                <Play className="h-6 w-6 fill-slate-950 ml-1" />
-              </button>
-            </div>
-
-            {/* Video Player Timeline Control */}
-            <div className="relative z-10">
-              <div className="flex items-center justify-between text-[11px] text-slate-300 font-mono">
-                <span>0:00 / 1:45</span>
-              </div>
-              <div className="mt-1 h-1.5 w-full rounded-full bg-slate-700">
-                <div className="h-full w-1/4 rounded-full bg-blue-500" />
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+      <section className="rounded-2xl border border-slate-800 bg-[#121828] p-5 text-xs text-slate-300">
+        <h2 className="font-bold text-white mb-3">Como fazer uma análise</h2>
+        <ol className="list-decimal pl-4 space-y-2">
+          <li>Abra seu anúncio e o concorrente no marketplace e confira os dados.</li>
+          <li>Preencha manualmente título, preço, frete, vendas e avaliação nos dois formulários.</li>
+          <li>Clique em Analisar Mercado Agora e revise as sugestões. A análise fica salva neste navegador.</li>
+        </ol>
+        <p className="mt-3 text-slate-400">A captura automática por extensão e o vídeo tutorial ainda não estão disponíveis.</p>
+      </section>
     </div>
   );
 };
