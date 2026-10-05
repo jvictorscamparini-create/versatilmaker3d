@@ -1,4 +1,6 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import { usePersistentState } from "./hooks/usePersistentState";
+import { parseRecordDate } from "./utils/dates";
 import { Header } from "./components/Header";
 import { Sidebar } from "./components/Sidebar";
 import { LandingPage } from "./components/LandingPage";
@@ -39,13 +41,20 @@ export default function App() {
   const [currentView, setCurrentView] = useState<AppView>("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
+  const [storageError, setStorageError] = useState(false);
+  useEffect(() => {
+    const onStorageError = () => setStorageError(true);
+    window.addEventListener("versatilmaker:storage-error", onStorageError);
+    return () => window.removeEventListener("versatilmaker:storage-error", onStorageError);
+  }, []);
+
   // Core Application State
-  const [orders, setOrders] = useState<OrderItem[]>(initialOrders);
-  const [filaments, setFilaments] = useState<Filament[]>(initialFilaments);
-  const [printers, setPrinters] = useState<Printer[]>(initialPrinters);
-  const [productionCards, setProductionCards] = useState<ProductionCard[]>(initialProductionCards);
-  const [savedCalculations, setSavedCalculations] = useState<SavedCalculation[]>(initialSavedCalculations);
-  const [customers, setCustomers] = useState<Customer[]>(initialCustomers);
+  const [orders, setOrders] = usePersistentState<OrderItem[]>("orders", initialOrders.map(order => ({...order, date: parseRecordDate(order.date)?.toLocaleDateString("pt-BR") || order.date})));
+  const [filaments, setFilaments] = usePersistentState<Filament[]>("filaments", initialFilaments);
+  const [printers, setPrinters] = usePersistentState<Printer[]>("printers", initialPrinters);
+  const [productionCards, setProductionCards] = usePersistentState<ProductionCard[]>("productionCards", initialProductionCards.map(card => ({...card, filamentDeducted: card.status === "finalizado"})));
+  const [savedCalculations, setSavedCalculations] = usePersistentState<SavedCalculation[]>("savedCalculations", initialSavedCalculations);
+  const [customers, setCustomers] = usePersistentState<Customer[]>("customers", initialCustomers);
   const [creativeStudioProduct, setCreativeStudioProduct] = useState("Escultura Gato Abstrato Geometrico 3D");
 
   // Navigation Helper
@@ -118,43 +127,19 @@ export default function App() {
   };
 
   const handleUpdateCardStatus = (cardId: string, newStatus: ProductionCard["status"]) => {
-    setProductionCards((prev) =>
-      prev.map((c) => {
-        if (c.id !== cardId) return c;
-
-        // When card is finalized, deduct filament grams from stock automatically!
-        if (newStatus === "finalizado" && c.status !== "finalizado") {
-          const targetFilamentId = c.filamentId || filaments[0]?.id;
-          if (targetFilamentId) {
-            handleUpdateFilamentGrams(targetFilamentId, c.weightGrams);
-          }
-
-          // If assigned to a printer, release the printer
-          if (c.printerId) {
-            setPrinters((printersList) =>
-              printersList.map((p) =>
-                p.id === c.printerId
-                  ? { ...p, status: "livre", currentJob: undefined, progressPercent: 0 }
-                  : p
-              )
-            );
-          }
-        }
-
-        // If moved to printing, set assigned printer as busy
-        if (newStatus === "imprimindo" && c.printerId) {
-          setPrinters((printersList) =>
-            printersList.map((p) =>
-              p.id === c.printerId
-                ? { ...p, status: "imprimindo", currentJob: c.title, progressPercent: 35 }
-                : p
-            )
-          );
-        }
-
-        return { ...c, status: newStatus };
-      })
-    );
+    const card = productionCards.find((item) => item.id === cardId);
+    if (!card || card.status === newStatus) return;
+    if (newStatus === "finalizado" && !card.filamentDeducted) {
+      const filamentId = card.filamentId || filaments[0]?.id;
+      if (filamentId) handleUpdateFilamentGrams(filamentId, card.weightGrams);
+    }
+    if (card.printerId && (newStatus === "imprimindo" || newStatus === "finalizado")) {
+      const printing = newStatus === "imprimindo";
+      setPrinters((list) => list.map((printer) => printer.id === card.printerId
+        ? { ...printer, status: printing ? "imprimindo" : "livre", currentJob: printing ? card.title : undefined, progressPercent: printing ? 35 : 0 }
+        : printer));
+    }
+    setProductionCards((list) => list.map((item) => item.id === cardId ? { ...item, status: newStatus, completedAt: newStatus === "finalizado" ? new Date().toLocaleDateString("pt-BR") : item.completedAt, filamentDeducted: item.filamentDeducted || newStatus === "finalizado" } : item));
   };
 
   const handleDeleteCard = (cardId: string) => {
@@ -163,6 +148,7 @@ export default function App() {
 
   // --- SALES & CUSTOMERS ---
   const handleAddOrder = (newOrder: Omit<OrderItem, "id" | "date">) => {
+    const clientName = newOrder.clientName || newOrder.customerName || "Cliente";
     const created: OrderItem = {
       ...newOrder,
       id: "ord-" + Date.now(),
@@ -173,7 +159,7 @@ export default function App() {
     // Also automatically create or update customer in CRM
     setCustomers((prev) => {
       const existing = prev.find(
-        (cust) => cust.name.toLowerCase() === newOrder.clientName.toLowerCase()
+        (cust) => cust.name.toLowerCase() === clientName.toLowerCase()
       );
       if (existing) {
         return prev.map((cust) =>
@@ -190,9 +176,9 @@ export default function App() {
       return [
         {
           id: "cust-" + Date.now(),
-          name: newOrder.clientName,
-          phone: "(11) 99887-6655",
-          city: "São Paulo, SP",
+          name: clientName,
+          phone: "",
+          city: "",
           totalOrders: 1,
           totalSpent: newOrder.totalPrice,
           lastOrderDate: new Date().toLocaleDateString("pt-BR"),
@@ -203,10 +189,10 @@ export default function App() {
 
     // Also prompt to add to production queue
     handleAddProductionCard({
-      title: `${newOrder.productName} (${newOrder.clientName})`,
+      title: `${newOrder.productName} (${clientName})`,
       productName: newOrder.productName,
-      clientName: newOrder.clientName,
-      orderNumber: newOrder.code,
+      clientName,
+      orderNumber: newOrder.orderCode || newOrder.code,
       origin: newOrder.platform,
       weightGrams: 55,
       printTimeHours: 3.5,
@@ -278,6 +264,7 @@ export default function App() {
 
           {/* Main View Router */}
           <main className="flex-1 pb-16">
+            {storageError && <div role="alert" className="mx-auto max-w-xl bg-amber-950 p-3 text-sm text-amber-200">Não foi possível salvar neste navegador. Exporte um backup em Configurações antes de fechar a página.</div>}
             {currentView === "dashboard" && (
               <DashboardView
                 orders={orders}

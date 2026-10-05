@@ -65,6 +65,8 @@ export interface ProductionCard {
   status: 'a_fazer' | 'imprimindo' | 'finalizado';
   priority: 'normal' | 'alta' | 'urgente';
   createdAt: string;
+  completedAt?: string;
+  filamentDeducted?: boolean;
   dueDate?: string;
   notes?: string;
 }

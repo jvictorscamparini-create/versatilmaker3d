@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { readStoredValue, writeStoredValue } from "../hooks/usePersistentState";
 import {
   Settings,
   Save,
@@ -42,19 +43,23 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   savedCalculations = initialSavedCalculations,
   customers = initialCustomers,
 }) => {
-  const [storeName, setStoreName] = useState("Versátil Maker");
-  const [whatsapp, setWhatsapp] = useState("(11) 98765-4321");
-  const [pixKey, setPixKey] = useState("contato@versatilmaker.com.br");
-  const [cep, setCep] = useState("01310-100");
-  const [cityState, setCityState] = useState("São Paulo - SP");
-  const [notifyWhatsApp, setNotifyWhatsApp] = useState(true);
-  const [notifyLowFilament, setNotifyLowFilament] = useState(true);
+  const [storedConfig] = useState(() => readStoredValue("storeConfig", { storeName: "Versátil Maker", whatsapp: "", pixKey: "", cep: "", cityState: "", notifyWhatsApp: false, notifyLowFilament: true }));
+  const [saveError, setSaveError] = useState(false);
+  const [storeName, setStoreName] = useState(storedConfig.storeName);
+  const [whatsapp, setWhatsapp] = useState(storedConfig.whatsapp);
+  const [pixKey, setPixKey] = useState(storedConfig.pixKey);
+  const [cep, setCep] = useState(storedConfig.cep);
+  const [cityState, setCityState] = useState(storedConfig.cityState);
+  const [notifyWhatsApp, setNotifyWhatsApp] = useState(storedConfig.notifyWhatsApp);
+  const [notifyLowFilament, setNotifyLowFilament] = useState(storedConfig.notifyLowFilament);
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [backupDownloaded, setBackupDownloaded] = useState(false);
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
-    setSavedSuccess(true);
+    const saved = writeStoredValue("storeConfig", { storeName, whatsapp, pixKey, cep, cityState, notifyWhatsApp, notifyLowFilament });
+    setSaveError(!saved);
+    setSavedSuccess(saved);
     setTimeout(() => setSavedSuccess(false), 3000);
   };
 
@@ -63,6 +68,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     const timestamp = new Date().toISOString();
     const dateFormatted = new Date().toISOString().split("T")[0];
 
+    const expenses = readStoredValue("expenses", []);
+    const marketAnalyses = readStoredValue("marketAnalyses", []);
     const databaseBackup = {
       app: "Versátil Maker - Gestão 3D",
       version: "1.0.0",
@@ -83,6 +90,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         totalProductionCards: productionCards.length,
         totalCalculations: savedCalculations.length,
         totalCustomers: customers.length,
+        totalExpenses: expenses.length,
+        totalMarketAnalyses: marketAnalyses.length,
       },
       database: {
         orders,
@@ -91,6 +100,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         productionCards,
         savedCalculations,
         customers,
+        expenses,
+        marketAnalyses,
       },
     };
 
@@ -152,7 +163,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
 
         <p className="text-xs text-slate-300">
-          Faça o download de um cópia completa de segurança com todas as suas vendas, estoque de filamentos, cadastro de impressoras, fila de produção e clientes em arquivo JSON.
+          Os dados ficam salvos neste navegador e não são sincronizados entre dispositivos. Faça o download de uma cópia completa de segurança com todas as suas vendas, estoque de filamentos, cadastro de impressoras, fila de produção e clientes em arquivo JSON.
         </p>
 
         {/* Database Status Cards */}
@@ -280,7 +291,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <label className="flex items-center justify-between rounded-xl bg-[#0d1320] p-3 cursor-pointer">
             <div>
               <p className="font-semibold text-white">Notificar conclusão no WhatsApp</p>
-              <p className="text-[11px] text-slate-400">Receber link de impressão finalizada automaticamente.</p>
+              <p className="text-[11px] text-slate-400">Preferência salva; envio por WhatsApp ainda não integrado.</p>
             </div>
             <input
               type="checkbox"
@@ -291,6 +302,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </label>
         </div>
 
+        {saveError && <p role="alert" className="text-amber-300">Não foi possível salvar. Verifique o espaço e as permissões do navegador.</p>}
         {savedSuccess && (
           <div className="flex items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-950/40 p-3 text-xs font-semibold text-emerald-300">
             <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />

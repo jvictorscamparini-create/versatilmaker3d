@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from "react";
+import { sameDay } from "../utils/dates";
 import {
   ResponsiveContainer,
   BarChart,
@@ -73,44 +74,28 @@ export const VisualMetricsDashboard: React.FC<VisualMetricsDashboardProps> = ({
   const [metricTab, setMetricTab] = useState<"combined" | "pieces" | "grams" | "hours">("combined");
   const [activeSection, setActiveSection] = useState<"all" | "production" | "queue" | "sales">("all");
 
-  // Calculate dynamic 7-day data based on current context
+  // Séries derivadas dos cadastros, sem volumes fictícios.
   const last7DaysData: DailyProductionData[] = useMemo(() => {
-    const days = [
-      { name: "Qua", offset: 6, pieces: 9, grams: 440, hours: 16.5, ml: 2, shp: 2, dir: 1, rev: 310.5, eff: 98 },
-      { name: "Qui", offset: 5, pieces: 14, grams: 680, hours: 20.2, ml: 3, shp: 3, dir: 1, rev: 485.0, eff: 96 },
-      { name: "Sex", offset: 4, pieces: 18, grams: 890, hours: 23.5, ml: 5, shp: 4, dir: 2, rev: 670.0, eff: 99 },
-      { name: "Sáb", offset: 3, pieces: 12, grams: 590, hours: 17.8, ml: 4, shp: 3, dir: 1, rev: 440.0, eff: 95 },
-      { name: "Dom", offset: 2, pieces: 15, grams: 760, hours: 21.0, ml: 3, shp: 5, dir: 2, rev: 560.0, eff: 97 },
-      { name: "Seg", offset: 1, pieces: 21, grams: 1040, hours: 24.2, ml: 6, shp: 4, dir: 3, rev: 790.0, eff: 100 },
-      { name: "Hoje", offset: 0, pieces: 16, grams: 820, hours: 19.5, ml: 4, shp: 3, dir: 1, rev: 580.0, eff: 98 },
-    ];
-
-    const today = new Date();
-
-    return days.map((d) => {
-      const targetDate = new Date();
-      targetDate.setDate(today.getDate() - d.offset);
-      const dateStr = `${targetDate.getDate().toString().padStart(2, "0")}/${(targetDate.getMonth() + 1).toString().padStart(2, "0")}`;
-
-      // If today, incorporate current live orders
-      const liveOrdersCount = d.offset === 0 ? Math.max(orders.length, 3) : d.ml + d.shp + d.dir;
-      const liveRevenue = d.offset === 0 ? Math.max(orders.reduce((acc, o) => acc + o.totalPrice, 0), d.rev) : d.rev;
-
+    return Array.from({length:7},(_,index) => {
+      const date = new Date();
+      date.setDate(date.getDate() - (6-index));
+      const dayOrders = orders.filter(order => sameDay(order.date,date));
+      const completed = productionCards.filter(card => card.status === "finalizado" && sameDay(card.completedAt || card.createdAt,date));
       return {
-        dayName: d.name,
-        dateStr,
-        pieces: d.pieces,
-        weightGrams: d.grams,
-        hours: d.hours,
-        mlSales: d.ml,
-        shopeeSales: d.shp,
-        directSales: d.dir,
-        totalSales: liveOrdersCount,
-        revenue: liveRevenue,
-        efficiency: d.eff,
+        dayName: index === 6 ? "Hoje" : date.toLocaleDateString("pt-BR",{weekday:"short"}),
+        dateStr: date.toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"}),
+        pieces: completed.length,
+        weightGrams: completed.reduce((sum,card) => sum+card.weightGrams,0),
+        hours: completed.reduce((sum,card) => sum+card.printTimeHours,0),
+        mlSales: dayOrders.filter(order => order.platform === "Mercado Livre").length,
+        shopeeSales: dayOrders.filter(order => order.platform === "Shopee").length,
+        directSales: dayOrders.filter(order => order.platform === "WhatsApp" || order.platform === "Direto").length,
+        totalSales: dayOrders.length,
+        revenue: dayOrders.reduce((sum,order) => sum+order.totalPrice,0),
+        efficiency: 0,
       };
     });
-  }, [orders]);
+  }, [orders,productionCards]);
 
   // Aggregate 7-day Totals
   const totalPieces7Days = useMemo(() => last7DaysData.reduce((sum, d) => sum + d.pieces, 0), [last7DaysData]);
@@ -123,8 +108,7 @@ export const VisualMetricsDashboard: React.FC<VisualMetricsDashboardProps> = ({
 
   // Aggregate Sales Metrics
   const totalSalesCount = useMemo(() => {
-    const baseRecordedSales = 78;
-    return baseRecordedSales + orders.length;
+    return orders.length;
   }, [orders]);
 
   const totalSales7Days = useMemo(() => last7DaysData.reduce((sum, d) => sum + d.totalSales, 0), [last7DaysData]);
@@ -132,11 +116,11 @@ export const VisualMetricsDashboard: React.FC<VisualMetricsDashboardProps> = ({
 
   // 1. Channel Distribution Data for Recharts
   const salesChannelData = useMemo(() => {
-    const mlCount = orders.filter((o) => o.platform === "Mercado Livre").length + 42;
-    const shopeeCount = orders.filter((o) => o.platform === "Shopee").length + 28;
-    const directCount = orders.filter((o) => o.platform === "WhatsApp" || o.platform === "Direto").length + 12;
+    const mlCount = orders.filter((o) => o.platform === "Mercado Livre").length;
+    const shopeeCount = orders.filter((o) => o.platform === "Shopee").length;
+    const directCount = orders.filter((o) => o.platform === "WhatsApp" || o.platform === "Direto").length;
 
-    const total = mlCount + shopeeCount + directCount;
+    const total = Math.max(1, mlCount + shopeeCount + directCount);
 
     return [
       { name: "Mercado Livre", value: mlCount, percentage: ((mlCount / total) * 100).toFixed(0), color: "#facc15" },
@@ -210,7 +194,7 @@ export const VisualMetricsDashboard: React.FC<VisualMetricsDashboardProps> = ({
               {data.dayName} ({data.dateStr})
             </span>
             <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-semibold text-emerald-400">
-              {data.efficiency}% Eficiência
+              Registro manual
             </span>
           </div>
           <div className="mt-2 space-y-1.5">
@@ -369,7 +353,7 @@ export const VisualMetricsDashboard: React.FC<VisualMetricsDashboardProps> = ({
               Vendas Realizadas
             </span>
             <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-bold text-emerald-300 border border-emerald-500/30 flex items-center gap-0.5">
-              <ArrowUpRight className="h-3 w-3" /> +18.4%
+              <ArrowUpRight className="h-3 w-3" /> Cadastradas
             </span>
           </div>
 
@@ -379,7 +363,7 @@ export const VisualMetricsDashboard: React.FC<VisualMetricsDashboardProps> = ({
                 {totalSalesCount}
               </p>
               <p className="text-[11px] text-emerald-400/90 font-medium mt-0.5">
-                Total de pedidos confirmados
+                Total de pedidos cadastrados
               </p>
             </div>
             <div className="text-right text-[11px] text-slate-400">
@@ -972,18 +956,18 @@ export const VisualMetricsDashboard: React.FC<VisualMetricsDashboardProps> = ({
           <div className="flex items-start gap-2 rounded-xl bg-[#121828] p-3 border border-slate-800/80">
             <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
             <div>
-              <p className="font-bold text-slate-100">Eficiência Média 97.4%</p>
+              <p className="font-bold text-slate-100">Produção registrada</p>
               <p className="text-[11px] text-slate-400 mt-0.5">
-                Perda de filamento por falha de impressão abaixo de 2.6% na semana.
+                {totalPieces7Days} cartão(ões) finalizado(s) nos últimos 7 dias.
               </p>
             </div>
           </div>
           <div className="flex items-start gap-2 rounded-xl bg-[#121828] p-3 border border-slate-800/80">
             <Award className="h-4 w-4 text-yellow-400 shrink-0 mt-0.5" />
             <div>
-              <p className="font-bold text-slate-100">Mercado Livre Lidera Vendas</p>
+              <p className="font-bold text-slate-100">Vendas por canal</p>
               <p className="text-[11px] text-slate-400 mt-0.5">
-                Representa a maior fatia de faturamento e volume de pedidos confirmados.
+                A distribuição considera somente os pedidos cadastrados.
               </p>
             </div>
           </div>
@@ -992,7 +976,7 @@ export const VisualMetricsDashboard: React.FC<VisualMetricsDashboardProps> = ({
             <div>
               <p className="font-bold text-slate-100">Capacidade Operacional</p>
               <p className="text-[11px] text-slate-400 mt-0.5">
-                {activePrintersCount} impressora(s) operando ativamente. {printers.length - activePrintersCount} livre(s) para novos trabalhos.
+                {activePrintersCount} impressora(s) operando ativamente. {printers.filter(printer => printer.status === "livre").length} livre(s) para novos trabalhos.
               </p>
             </div>
           </div>

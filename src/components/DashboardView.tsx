@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { sameDay } from "../utils/dates";
 import {
   TrendingUp,
   AlertTriangle,
@@ -39,11 +40,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [showSetupGuide, setShowSetupGuide] = useState(false);
 
   // Compute real metrics
-  const todayRevenue = orders.reduce((acc, o) => acc + o.totalPrice, 0);
+  const todayOrders = orders.filter(order => sameDay(order.date,new Date()));
+  const todayRevenue = todayOrders.reduce((acc, o) => acc + o.totalPrice, 0);
   // Assume estimated costs (materials + packaging + platform fees ~ 42%)
   const todayCosts = Number((todayRevenue * 0.42).toFixed(2));
   const todayProfit = Number((todayRevenue - todayCosts).toFixed(2));
-  const todaySalesCount = orders.length;
+  const todaySalesCount = todayOrders.length;
   const mlSales = orders.filter((o) => o.platform === "Mercado Livre").length;
   const shopeeSales = orders.filter((o) => o.platform === "Shopee").length;
   const averageMargin = todayRevenue > 0 ? ((todayProfit / todayRevenue) * 100).toFixed(2) : "0.00";
@@ -195,7 +197,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </p>
         </div>
 
-        {/* Custo Total (Hoje) */}
+        {/* Custo Estimado (Hoje) */}
         <div className="relative overflow-hidden rounded-2xl border border-red-500/20 bg-gradient-to-br from-[#121828] to-[#1c1219] p-5 shadow-sm">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-400">Custo Total (Hoje)</span>
@@ -205,11 +207,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             R$ {todayCosts.toFixed(2)}
           </p>
           <p className="mt-1 text-[11px] text-slate-400">
-            Filamento + Energia + Embalagens + Taxas
+            Estimativa de 42% da receita; confira os custos no Financeiro
           </p>
         </div>
 
-        {/* Lucro Líquido Real (Hoje) */}
+        {/* Lucro Estimado (Hoje) */}
         <div className="relative overflow-hidden rounded-2xl border border-emerald-500/30 bg-gradient-to-br from-[#121828] to-[#0e211b] p-5 shadow-sm">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-400">Lucro Líquido Real (Hoje)</span>
@@ -219,7 +221,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             R$ {todayProfit.toFixed(2)}
           </p>
           <p className="mt-1 text-[11px] text-emerald-400/80 font-medium">
-            Margem real líquida: {averageMargin}%
+            Margem estimada: {averageMargin}%
           </p>
         </div>
 
@@ -314,7 +316,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-sm font-bold text-white">Mais Lucrativos (Hoje)</h3>
-              <p className="text-[11px] text-slate-400">Ranking por lucro líquido real</p>
+              <p className="text-[11px] text-slate-400">Ranking por margem estimada</p>
             </div>
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-400">
               <DollarSign className="h-4 w-4" />

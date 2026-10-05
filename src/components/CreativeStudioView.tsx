@@ -25,6 +25,8 @@ export const CreativeStudioView: React.FC<CreativeStudioViewProps> = ({
   const [targetPlatform, setTargetPlatform] = useState<"Shopee" | "Mercado Livre" | "Ambos">("Ambos");
   const [colorFinish, setColorFinish] = useState("Preto Fosco Premium / PLA Biodegradável");
   const [tone, setTone] = useState("Elegante e Persuasivo");
+  const [resultSource, setResultSource] = useState<string>("");
+  const [requestError, setRequestError] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [copiedSection, setCopiedSection] = useState<string | null>(null);
 
@@ -73,6 +75,7 @@ Transforme qualquer ambiente com esta obra contemporânea. Perfeito para salas, 
 
   const handleGenerate = async () => {
     setIsGenerating(true);
+    setRequestError("");
     try {
       const response = await fetch("/api/creative-studio/generate", {
         method: "POST",
@@ -87,11 +90,13 @@ Transforme qualquer ambiente com esta obra contemporânea. Perfeito para salas, 
       });
 
       const resData = await response.json();
+      if (!response.ok || !resData.success) throw new Error(resData.error || "Não foi possível gerar o anúncio.");
+      setResultSource(resData.source || "");
       if (resData.data) {
         setGeneratedAd(resData.data);
       }
     } catch (err) {
-      console.error(err);
+      setRequestError(err instanceof Error ? err.message : "Não foi possível gerar o anúncio.");
     } finally {
       setIsGenerating(false);
     }
@@ -105,6 +110,8 @@ Transforme qualquer ambiente com esta obra contemporânea. Perfeito para salas, 
 
   return (
     <div className="mx-auto max-w-xl px-4 py-6 text-slate-100 flex flex-col gap-6">
+      {requestError && <p role="alert" className="rounded-xl bg-red-950/40 p-3 text-xs text-red-200">{requestError}</p>}
+      {resultSource === "local" && <p role="status" className="rounded-xl bg-amber-950/40 p-3 text-xs text-amber-200">Resultado de modelo local, sem consulta à IA ou aos marketplaces. Revise preços, especificações e sugestões antes de usar.</p>}
       {/* Title & Subtitle (Screenshot 27) */}
       <div>
         <div className="flex items-center gap-2.5">
