@@ -96,6 +96,18 @@ export default function App() {
   });
 
   const [creativeStudioProduct, setCreativeStudioProduct] = useState("Escultura Gato Abstrato Geometrico 3D");
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
 
   // Sync with LocalStorage on change
   useEffect(() => {
@@ -389,6 +401,13 @@ export default function App() {
             onNavigate={navigateTo}
             unreadCount={pendingCount}
           />
+
+          {!isOnline && (
+            <div className="bg-amber-500/20 border-b border-amber-500/30 px-4 py-2 text-center text-xs font-semibold text-amber-300 flex items-center justify-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-amber-400 animate-pulse"></span>
+              <span>Modo Offline (PWA): Funcionalidades de Fila de Produção e Calculadora operando localmente via Service Worker.</span>
+            </div>
+          )}
 
           {/* Sliding Drawer Sidebar */}
           <Sidebar
