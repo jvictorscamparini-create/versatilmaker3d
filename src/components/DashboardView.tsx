@@ -7,16 +7,15 @@ import {
   Calculator,
   Tag,
   Box,
-  Clock,
   Star,
   CheckCircle2,
-  Circle,
-  ArrowRight,
   Printer,
-  Sparkles,
   Share2,
   ChevronDown,
   ChevronUp,
+  Layers,
+  ArrowRight,
+  Flame,
 } from "lucide-react";
 import { AppView, Filament, OrderItem, Printer as PrinterType, ProductionCard } from "../types";
 import { VisualMetricsDashboard } from "./VisualMetricsDashboard";
@@ -40,15 +39,27 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   // Compute real metrics
   const todayRevenue = orders.reduce((acc, o) => acc + o.totalPrice, 0);
-  // Assume estimated costs (materials + packaging + platform fees ~ 42%)
   const todayCosts = Number((todayRevenue * 0.42).toFixed(2));
   const todayProfit = Number((todayRevenue - todayCosts).toFixed(2));
   const todaySalesCount = orders.length;
-  const mlSales = orders.filter((o) => o.platform === "Mercado Livre").length;
-  const shopeeSales = orders.filter((o) => o.platform === "Shopee").length;
   const averageMargin = todayRevenue > 0 ? ((todayProfit / todayRevenue) * 100).toFixed(2) : "0.00";
   const averageTicket = todaySalesCount > 0 ? (todayRevenue / todaySalesCount).toFixed(2) : "0.00";
   const lowStockFilaments = filaments.filter((f) => f.weightRemainingGrams < 200);
+
+  // Monthly Filament Consumption & Estimated Profit Margin Calculations
+  const totalUnitsSold = orders.reduce((sum, o) => sum + (o.quantity || 1), 0);
+  // Estimate average 95g of filament per printed unit
+  const estimatedGramsConsumed = totalUnitsSold * 95;
+  const avgCostPerGram = filaments.length > 0
+    ? filaments.reduce((sum, f) => sum + (f.pricePerKg / 1000), 0) / filaments.length
+    : 0.08; // Default R$ 0.08/g (R$ 80/kg)
+  const monthlyFilamentCost = Number((estimatedGramsConsumed * avgCostPerGram).toFixed(2));
+  const monthlyRevenue = todayRevenue; // Cumulative for current period
+  const estimatedPlatformFees = monthlyRevenue * 0.175;
+  const estimatedEnergyPackaging = monthlyFilamentCost * 0.35;
+  const estimatedTotalExpenses = monthlyFilamentCost + estimatedPlatformFees + estimatedEnergyPackaging;
+  const estimatedNetProfit = monthlyRevenue - estimatedTotalExpenses;
+  const estimatedProfitMargin = monthlyRevenue > 0 ? ((estimatedNetProfit / monthlyRevenue) * 100).toFixed(1) : "0.0";
 
   return (
     <div className="mx-auto max-w-5xl px-4 sm:px-6 py-6 text-slate-100 flex flex-col gap-6">
@@ -64,7 +75,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </h1>
           </div>
           <p className="mt-1 text-xs text-slate-400">
-            Acompanhe o volume de produção dos últimos 7 dias, total de vendas e saúde financeira da oficina 3D.
+            Acompanhe o volume de produção, consumo de filamentos e saúde financeira da oficina 3D em tempo real.
           </p>
         </div>
 
@@ -72,18 +83,112 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         <div className="flex items-center gap-2">
           <button
             onClick={() => onNavigate("vendas")}
-            className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white shadow hover:bg-emerald-500 active:scale-98 transition"
+            className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white shadow hover:bg-emerald-500 active:scale-98 transition cursor-pointer"
           >
             <ShoppingCart className="h-3.5 w-3.5" />
             <span>+ Nova Venda</span>
           </button>
           <button
             onClick={() => onNavigate("fila-producao")}
-            className="flex items-center gap-1.5 rounded-xl border border-blue-500/30 bg-blue-950/30 px-3.5 py-2 text-xs font-bold text-blue-300 hover:bg-blue-900/40 active:scale-98 transition"
+            className="flex items-center gap-1.5 rounded-xl border border-blue-500/30 bg-blue-950/30 px-3.5 py-2 text-xs font-bold text-blue-300 hover:bg-blue-900/40 active:scale-98 transition cursor-pointer"
           >
             <Printer className="h-3.5 w-3.5" />
             <span>Fila de Produção</span>
           </button>
+        </div>
+      </div>
+
+      {/* MONTHLY FILAMENT CONSUMPTION & ESTIMATED PROFIT MARGIN COMPONENT CARD */}
+      <div className="rounded-2xl border border-blue-500/40 bg-gradient-to-br from-[#121828] via-[#0d152a] to-[#121828] p-5 shadow-xl glow-card flex flex-col gap-4">
+        <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+          <div className="flex items-center gap-2">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-600/20 text-blue-400">
+              <Layers className="h-4 w-4" />
+            </div>
+            <h2 className="text-xs font-bold uppercase tracking-wider text-white">
+              Consumo de Filamento & Margem de Lucro Estimada (Mensal)
+            </h2>
+          </div>
+          <span className="rounded-full bg-blue-950 px-2.5 py-1 text-[10px] font-bold text-blue-300 border border-blue-500/30">
+            Baseado em {totalUnitsSold} unidades vendidas
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* 1. Custo Total de Filamento */}
+          <div className="rounded-xl bg-[#0c1220] p-4 border border-slate-800 flex flex-col justify-between">
+            <div>
+              <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">
+                Custo Filamento (Mês)
+              </span>
+              <p className="mt-2 text-2xl font-black text-amber-400">
+                R$ {monthlyFilamentCost.toFixed(2)}
+              </p>
+            </div>
+            <div className="mt-3 text-[11px] text-slate-400 flex items-center gap-1">
+              <Flame className="h-3.5 w-3.5 text-amber-500" />
+              <span>Aprox. {(estimatedGramsConsumed / 1000).toFixed(2)} kg consumidos</span>
+            </div>
+          </div>
+
+          {/* 2. Margem de Lucro Estimada */}
+          <div className="rounded-xl bg-[#0c1220] p-4 border border-slate-800 flex flex-col justify-between">
+            <div>
+              <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">
+                Margem de Lucro Est.
+              </span>
+              <p className="mt-2 text-2xl font-black text-emerald-400">
+                {estimatedProfitMargin}%
+              </p>
+            </div>
+            <div className="mt-3 text-[11px] text-emerald-400/80 font-medium">
+              Meta ideal: &gt; 40.0%
+            </div>
+          </div>
+
+          {/* 3. Faturamento Bruto Mensal */}
+          <div className="rounded-xl bg-[#0c1220] p-4 border border-slate-800 flex flex-col justify-between">
+            <div>
+              <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">
+                Faturamento Bruto
+              </span>
+              <p className="mt-2 text-2xl font-black text-blue-400">
+                R$ {monthlyRevenue.toFixed(2)}
+              </p>
+            </div>
+            <div className="mt-3 text-[11px] text-slate-400">
+              {orders.length} pedidos registrados
+            </div>
+          </div>
+
+          {/* 4. Lucro Líquido Estimado */}
+          <div className="rounded-xl bg-[#0c1220] p-4 border border-slate-800 flex flex-col justify-between">
+            <div>
+              <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">
+                Lucro Líquido Est.
+              </span>
+              <p className="mt-2 text-2xl font-black text-white">
+                R$ {estimatedNetProfit.toFixed(2)}
+              </p>
+            </div>
+            <div className="mt-3 text-[11px] text-slate-400">
+              Descontado taxas e insumos
+            </div>
+          </div>
+        </div>
+
+        {/* Progress Bar of Margin */}
+        <div className="mt-1 flex flex-col gap-1.5 bg-[#090e1a] p-3 rounded-xl border border-slate-800/80">
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-slate-300 font-semibold">Saúde da Margem Comercial</span>
+            <span className="text-emerald-400 font-bold">{estimatedProfitMargin}% de Retorno Líquido</span>
+          </div>
+          <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-blue-500 to-emerald-500 rounded-full transition-all duration-500"
+              style={{ width: `${Math.min(100, Math.max(5, Number(estimatedProfitMargin)))}%` }}
+            />
+          </div>
         </div>
       </div>
 
@@ -96,7 +201,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         onNavigate={onNavigate}
       />
 
-      {/* Setup Guide (Collapsible to keep interface clean) */}
+      {/* Setup Guide (Collapsible) */}
       <div className="rounded-2xl border border-slate-800/90 bg-[#121828] p-5 shadow-sm">
         <div
           className="flex items-center justify-between cursor-pointer select-none"
@@ -120,7 +225,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               Siga estes passos para aproveitar o máximo do Versátil Maker.
             </p>
 
-            {/* Progress Bar */}
             <div className="mt-3 flex items-center justify-between text-xs font-medium text-slate-400">
               <span>Progresso</span>
               <span className="text-slate-300 font-bold">50%</span>
@@ -129,7 +233,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <div className="h-full w-2/4 rounded-full bg-blue-600 transition-all duration-500" />
             </div>
 
-            {/* Checklist Steps */}
             <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
               <div className="flex items-center gap-2.5 rounded-xl border border-slate-800 bg-[#0d1320] p-3 text-xs">
                 <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
@@ -149,7 +252,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
               <button
                 onClick={() => onNavigate("maquinas")}
-                className="flex items-center justify-between rounded-xl border border-blue-500/20 bg-blue-950/20 p-3 text-left text-xs transition hover:bg-blue-950/40"
+                className="flex items-center justify-between rounded-xl border border-blue-500/20 bg-blue-950/20 p-3 text-left text-xs transition hover:bg-blue-950/40 cursor-pointer"
               >
                 <div className="flex items-center gap-2.5">
                   <Printer className="h-4 w-4 text-blue-400 shrink-0" />
@@ -163,7 +266,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
               <button
                 onClick={() => onNavigate("integracao-shopee")}
-                className="flex items-center justify-between rounded-xl border border-orange-500/20 bg-orange-950/20 p-3 text-left text-xs transition hover:bg-orange-950/40"
+                className="flex items-center justify-between rounded-xl border border-orange-500/20 bg-orange-950/20 p-3 text-left text-xs transition hover:bg-orange-950/40 cursor-pointer"
               >
                 <div className="flex items-center gap-2.5">
                   <Share2 className="h-4 w-4 text-orange-400 shrink-0" />
@@ -345,4 +448,3 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     </div>
   );
 };
-

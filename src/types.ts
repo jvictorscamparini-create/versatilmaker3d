@@ -231,8 +231,21 @@ export interface Customer {
 
 export interface CreativeAdResult {
   titles: string[];
-  description: string;
-  tags: string[];
-  photoPrompts: string[];
+  descriptions: {
+    short: string;
+    full: string;
+    bulletPoints: string[];
+    seoTags: string[];
+  };
+  salesConsultant: {
+    pricingTip: string;
+    bundleIdeas: string[];
+    conversionHooks: string[];
+    marketplaceTips: {
+      mercadoLivre: string;
+      shopee: string;
+    };
+  };
+  mockupPrompts: string[];
 }
 

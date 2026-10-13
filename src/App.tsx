@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Header } from "./components/Header";
 import { Sidebar } from "./components/Sidebar";
 import { LandingPage } from "./components/LandingPage";
@@ -16,6 +16,7 @@ import { ShopeeIntegrationView } from "./components/ShopeeIntegrationView";
 import { MercadoLivreIntegrationView } from "./components/MercadoLivreIntegrationView";
 import { SettingsView } from "./components/SettingsView";
 import { Generator3DView } from "./components/Generator3DView";
+import { AIChatbot } from "./components/AIChatbot";
 
 import {
   initialCustomers,
@@ -39,14 +40,135 @@ export default function App() {
   const [currentView, setCurrentView] = useState<AppView>("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // Core Application State
-  const [orders, setOrders] = useState<OrderItem[]>(initialOrders);
-  const [filaments, setFilaments] = useState<Filament[]>(initialFilaments);
-  const [printers, setPrinters] = useState<Printer[]>(initialPrinters);
-  const [productionCards, setProductionCards] = useState<ProductionCard[]>(initialProductionCards);
-  const [savedCalculations, setSavedCalculations] = useState<SavedCalculation[]>(initialSavedCalculations);
-  const [customers, setCustomers] = useState<Customer[]>(initialCustomers);
+  // Core Application State with LocalStorage persistence
+  const [orders, setOrders] = useState<OrderItem[]>(() => {
+    try {
+      const saved = localStorage.getItem("versatil_maker_orders");
+      return saved ? JSON.parse(saved) : initialOrders;
+    } catch {
+      return initialOrders;
+    }
+  });
+
+  const [filaments, setFilaments] = useState<Filament[]>(() => {
+    try {
+      const saved = localStorage.getItem("versatil_maker_filaments");
+      return saved ? JSON.parse(saved) : initialFilaments;
+    } catch {
+      return initialFilaments;
+    }
+  });
+
+  const [printers, setPrinters] = useState<Printer[]>(() => {
+    try {
+      const saved = localStorage.getItem("versatil_maker_printers");
+      return saved ? JSON.parse(saved) : initialPrinters;
+    } catch {
+      return initialPrinters;
+    }
+  });
+
+  const [productionCards, setProductionCards] = useState<ProductionCard[]>(() => {
+    try {
+      const saved = localStorage.getItem("versatil_maker_productionCards");
+      return saved ? JSON.parse(saved) : initialProductionCards;
+    } catch {
+      return initialProductionCards;
+    }
+  });
+
+  const [savedCalculations, setSavedCalculations] = useState<SavedCalculation[]>(() => {
+    try {
+      const saved = localStorage.getItem("versatil_maker_savedCalculations");
+      return saved ? JSON.parse(saved) : initialSavedCalculations;
+    } catch {
+      return initialSavedCalculations;
+    }
+  });
+
+  const [customers, setCustomers] = useState<Customer[]>(() => {
+    try {
+      const saved = localStorage.getItem("versatil_maker_customers");
+      return saved ? JSON.parse(saved) : initialCustomers;
+    } catch {
+      return initialCustomers;
+    }
+  });
+
   const [creativeStudioProduct, setCreativeStudioProduct] = useState("Escultura Gato Abstrato Geometrico 3D");
+
+  // Sync with LocalStorage on change
+  useEffect(() => {
+    try { localStorage.setItem("versatil_maker_orders", JSON.stringify(orders)); } catch {}
+  }, [orders]);
+
+  useEffect(() => {
+    try { localStorage.setItem("versatil_maker_filaments", JSON.stringify(filaments)); } catch {}
+  }, [filaments]);
+
+  useEffect(() => {
+    try { localStorage.setItem("versatil_maker_printers", JSON.stringify(printers)); } catch {}
+  }, [printers]);
+
+  useEffect(() => {
+    try { localStorage.setItem("versatil_maker_productionCards", JSON.stringify(productionCards)); } catch {}
+  }, [productionCards]);
+
+  useEffect(() => {
+    try { localStorage.setItem("versatil_maker_savedCalculations", JSON.stringify(savedCalculations)); } catch {}
+  }, [savedCalculations]);
+
+  useEffect(() => {
+    try { localStorage.setItem("versatil_maker_customers", JSON.stringify(customers)); } catch {}
+  }, [customers]);
+
+  // Reset database handler
+  const handleResetDatabase = (mode: 'empty' | 'default') => {
+    if (mode === 'empty') {
+      setOrders([]);
+      setFilaments([]);
+      setPrinters([]);
+      setProductionCards([]);
+      setSavedCalculations([]);
+      setCustomers([]);
+      localStorage.removeItem("versatil_maker_orders");
+      localStorage.removeItem("versatil_maker_filaments");
+      localStorage.removeItem("versatil_maker_printers");
+      localStorage.removeItem("versatil_maker_productionCards");
+      localStorage.removeItem("versatil_maker_savedCalculations");
+      localStorage.removeItem("versatil_maker_customers");
+    } else {
+      setOrders(initialOrders);
+      setFilaments(initialFilaments);
+      setPrinters(initialPrinters);
+      setProductionCards(initialProductionCards);
+      setSavedCalculations(initialSavedCalculations);
+      setCustomers(initialCustomers);
+      localStorage.setItem("versatil_maker_orders", JSON.stringify(initialOrders));
+      localStorage.setItem("versatil_maker_filaments", JSON.stringify(initialFilaments));
+      localStorage.setItem("versatil_maker_printers", JSON.stringify(initialPrinters));
+      localStorage.setItem("versatil_maker_productionCards", JSON.stringify(initialProductionCards));
+      localStorage.setItem("versatil_maker_savedCalculations", JSON.stringify(initialSavedCalculations));
+      localStorage.setItem("versatil_maker_customers", JSON.stringify(initialCustomers));
+    }
+  };
+
+  const handleImportDatabase = (data: any): boolean => {
+    try {
+      if (data && data.database) {
+        if (data.database.orders) setOrders(data.database.orders);
+        if (data.database.filaments) setFilaments(data.database.filaments);
+        if (data.database.printers) setPrinters(data.database.printers);
+        if (data.database.productionCards) setProductionCards(data.database.productionCards);
+        if (data.database.savedCalculations) setSavedCalculations(data.database.savedCalculations);
+        if (data.database.customers) setCustomers(data.database.customers);
+        return true;
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    return false;
+  };
 
   // Navigation Helper
   const navigateTo = (view: AppView) => {
@@ -374,11 +496,14 @@ export default function App() {
                 productionCards={productionCards}
                 savedCalculations={savedCalculations}
                 customers={customers}
+                onResetDatabase={handleResetDatabase}
+                onImportDatabase={handleImportDatabase}
               />
             )}
           </main>
         </div>
       )}
+      <AIChatbot />
     </div>
   );
 }

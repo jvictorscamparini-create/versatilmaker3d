@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import {
   Box,
   Sliders,
@@ -8,6 +8,10 @@ import {
   Sparkles,
   RefreshCw,
   Eye,
+  Paperclip,
+  Check,
+  X,
+  Upload,
 } from "lucide-react";
 
 interface Generator3DViewProps {
@@ -15,22 +19,65 @@ interface Generator3DViewProps {
 }
 
 export const Generator3DView: React.FC<Generator3DViewProps> = ({ onSendToQueue }) => {
-  const [modelType, setModelType] = useState<"vaso" | "placa" | "suporte" | "chaveiro">("vaso");
+  const [modelType, setModelType] = useState<"vaso" | "placa" | "suporte" | "chaveiro" | "custom">("vaso");
   const [customText, setCustomText] = useState("MAKERFLOW 3D");
   const [scaleFactor, setScaleFactor] = useState(100); // 100%
   const [wallThickness, setWallThickness] = useState(2);
   const [rotationAngle, setRotationAngle] = useState(25);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [referenceImage, setReferenceImage] = useState<string | null>(null);
+  const [referenceImageName, setReferenceImageName] = useState<string | null>(null);
+  const [generationSuccess, setGenerationSuccess] = useState(false);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Estimates based on parameters
   const estimatedWeight = Math.round(
-    (modelType === "vaso" ? 75 : modelType === "placa" ? 45 : modelType === "suporte" ? 60 : 20) *
+    (modelType === "vaso" ? 75 : modelType === "placa" ? 45 : modelType === "suporte" ? 60 : modelType === "chaveiro" ? 20 : 90) *
       (scaleFactor / 100) ** 2.2
   );
   const estimatedTime = (
-    (modelType === "vaso" ? 4.5 : modelType === "placa" ? 2.5 : modelType === "suporte" ? 3.5 : 1.2) *
+    (modelType === "vaso" ? 4.5 : modelType === "placa" ? 2.5 : modelType === "suporte" ? 3.5 : modelType === "chaveiro" ? 1.2 : 5.0) *
     (scaleFactor / 100) ** 1.8
   ).toFixed(1);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setReferenceImageName(file.name);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setReferenceImage(event.target?.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const removeReferenceImage = () => {
+    setReferenceImage(null);
+    setReferenceImageName(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const handleGenerate3D = () => {
+    setIsGenerating(true);
+    setTimeout(() => {
+      setIsGenerating(false);
+      setGenerationSuccess(true);
+      setTimeout(() => setGenerationSuccess(false), 3500);
+    }, 1500);
+  };
+
+  const handleDownloadSTL = () => {
+    const filename = `${modelType}_${customText.toLowerCase().replace(/\s+/g, "_")}_${scaleFactor}pct.stl`;
+    const dummyContent = `solid ${filename}\n  facet normal 0 0 1\n    outer loop\n      vertex 0 0 0\n      vertex 1 0 0\n      vertex 0 1 0\n    endloop\n  endfacet\nendsolid ${filename}`;
+    const blob = new Blob([dummyContent], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const handleSend = () => {
     const title = `${
@@ -40,8 +87,10 @@ export const Generator3DView: React.FC<Generator3DViewProps> = ({ onSendToQueue 
         ? `Placa 3D "${customText}"`
         : modelType === "suporte"
         ? "Suporte Articulado de Mesa"
-        : `Chaveiro Personalizado "${customText}"`
-    }`;
+        : modelType === "chaveiro"
+        ? `Chaveiro Personalizado "${customText}"`
+        : `Modelo 3D Personalizado por IA`
+    } (${scaleFactor}%)`;
     onSendToQueue(title, estimatedWeight, Number(estimatedTime));
   };
 
@@ -50,17 +99,24 @@ export const Generator3DView: React.FC<Generator3DViewProps> = ({ onSendToQueue 
       {/* Title */}
       <div>
         <div className="flex items-center gap-2.5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600/20 text-indigo-400">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600/20 text-indigo-400 border border-indigo-500/30">
             <Box className="h-5 w-5" />
           </div>
           <h1 className="text-2xl font-black tracking-tight text-white leading-tight">
-            Gerador Paramétrico 3D
+            Gerador Paramétrico & IA 3D
           </h1>
         </div>
         <p className="mt-1 text-xs text-slate-400">
-          Crie modelos tridimensionais personalizados em segundos para vender nos marketplaces.
+          Crie modelos tridimensionais personalizados em segundos com base em parâmetros ou foto de referência.
         </p>
       </div>
+
+      {generationSuccess && (
+        <div className="flex items-center gap-2 rounded-xl bg-emerald-950/80 border border-emerald-500/40 p-3 text-xs text-emerald-300 font-bold">
+          <Check className="h-4 w-4 text-emerald-400" />
+          <span>Modelo 3D gerado com sucesso! Pronto para download e impressão.</span>
+        </div>
+      )}
 
       {/* 3D Visualizer Canvas Sandbox */}
       <div className="relative overflow-hidden rounded-2xl border border-indigo-500/30 bg-gradient-to-b from-[#0e1428] via-[#090d1a] to-[#060810] p-6 text-center shadow-xl">
@@ -110,6 +166,14 @@ export const Generator3DView: React.FC<Generator3DViewProps> = ({ onSendToQueue 
                 </span>
               </div>
             )}
+
+            {modelType === "custom" && (
+              <div className="w-32 h-32 border-2 border-purple-400/80 bg-gradient-to-br from-purple-700/60 to-pink-700/50 rounded-2xl shadow-2xl flex flex-col items-center justify-center text-white backdrop-blur-xs">
+                <Sparkles className="h-6 w-6 text-pink-300 mb-1" />
+                <span className="text-[10px] font-bold text-purple-200">Modelo IA / Foto</span>
+                <span className="text-[9px] text-slate-300 mt-1">{estimatedWeight}g • {estimatedTime}h</span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -131,23 +195,24 @@ export const Generator3DView: React.FC<Generator3DViewProps> = ({ onSendToQueue 
       {/* Model Parameters Controls */}
       <div className="rounded-2xl border border-slate-800 bg-[#121828] p-5 shadow-sm flex flex-col gap-4 text-xs">
         <h3 className="text-xs font-bold uppercase tracking-wider text-slate-300">
-          PARÂMETROS DE GERAÇÃO
+          PARÂMETROS DE GERAÇÃO & REFERÊNCIA
         </h3>
 
         {/* Model Type */}
-        <div className="grid grid-cols-4 gap-2">
+        <div className="grid grid-cols-5 gap-1.5">
           {(
             [
               { id: "vaso", label: "Vaso" },
               { id: "placa", label: "Placa" },
               { id: "suporte", label: "Suporte" },
               { id: "chaveiro", label: "Chaveiro" },
+              { id: "custom", label: "IA/Foto" },
             ] as const
           ).map((t) => (
             <button
               key={t.id}
               onClick={() => setModelType(t.id)}
-              className={`rounded-xl py-2 font-bold transition text-xs ${
+              className={`rounded-xl py-2 font-bold transition text-[11px] ${
                 modelType === t.id
                   ? "bg-indigo-600 text-white shadow-sm"
                   : "bg-[#0d1320] border border-slate-800 text-slate-400 hover:text-white"
@@ -158,17 +223,62 @@ export const Generator3DView: React.FC<Generator3DViewProps> = ({ onSendToQueue 
           ))}
         </div>
 
+        {/* Reference Image Attachment */}
+        <div>
+          <label className="text-[11px] font-semibold text-slate-400 flex items-center justify-between">
+            <span className="flex items-center gap-1">
+              <Paperclip className="h-3.5 w-3.5 text-indigo-400" /> Anexar Imagem de Referência (Esboço / Foto)
+            </span>
+            <span className="text-[10px] text-indigo-300">Opcional</span>
+          </label>
+
+          {!referenceImage ? (
+            <div
+              onClick={() => fileInputRef.current?.click()}
+              className="mt-1.5 flex items-center justify-center gap-2 rounded-xl border border-dashed border-slate-700 bg-[#0d1320] p-3 text-center cursor-pointer hover:border-indigo-500 transition group"
+            >
+              <Upload className="h-4 w-4 text-indigo-400 group-hover:scale-110 transition" />
+              <span className="text-xs font-medium text-slate-300">Enviar imagem para inspirar geração 3D</span>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleFileChange}
+              />
+            </div>
+          ) : (
+            <div className="mt-1.5 flex items-center justify-between rounded-xl border border-indigo-500/30 bg-[#0c1220] p-2.5">
+              <div className="flex items-center gap-2.5">
+                <img
+                  src={referenceImage}
+                  alt="Referência"
+                  className="h-9 w-9 rounded-lg object-cover border border-indigo-500/40"
+                />
+                <span className="text-xs font-semibold text-white truncate max-w-[200px]">{referenceImageName}</span>
+              </div>
+              <button
+                onClick={removeReferenceImage}
+                className="rounded-lg p-1 text-slate-400 hover:bg-slate-800 hover:text-white transition"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          )}
+        </div>
+
         {/* Custom text for signs/keychains */}
-        {(modelType === "placa" || modelType === "chaveiro") && (
+        {(modelType === "placa" || modelType === "chaveiro" || modelType === "custom") && (
           <div>
             <label className="text-[11px] font-semibold text-slate-400">
-              Texto em Alto Relevo (Nome / Marca)
+              Texto ou Prompt do Modelo
             </label>
             <input
               type="text"
               value={customText}
-              maxLength={24}
+              maxLength={30}
               onChange={(e) => setCustomText(e.target.value)}
+              placeholder="Ex: Nome da marca ou descrição..."
               className="mt-1 w-full rounded-xl border border-slate-800 bg-[#0d1320] px-3.5 py-2.5 text-xs text-white focus:border-indigo-500 focus:outline-none"
             />
           </div>
@@ -198,26 +308,38 @@ export const Generator3DView: React.FC<Generator3DViewProps> = ({ onSendToQueue 
           </div>
           <div>
             <span className="text-[10px] text-slate-400 uppercase font-semibold">Tempo de Impressão:</span>
-            <p className="text-base font-black text-white">{estimatedTime}h</p>
+            <p className="text-base font-black text-emerald-400">{estimatedTime}h</p>
           </div>
         </div>
 
-        {/* Actions */}
-        <div className="grid grid-cols-2 gap-2 mt-2">
+        {/* Action Buttons */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
           <button
-            onClick={() => alert("Arquivo STL exportado e pronto para fatiar no Bambu Studio ou Cura!")}
-            className="flex items-center justify-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800 py-3 text-xs font-bold text-slate-200 hover:bg-slate-700 transition"
+            type="button"
+            disabled={isGenerating}
+            onClick={handleGenerate3D}
+            className="flex items-center justify-center gap-1.5 rounded-xl bg-indigo-600 py-3 text-xs font-bold text-white shadow-md shadow-indigo-600/30 hover:bg-indigo-500 active:scale-98 transition disabled:opacity-60 cursor-pointer"
           >
-            <Download className="h-4 w-4" />
-            <span>Baixar STL</span>
+            <Sparkles className="h-4 w-4" />
+            <span>{isGenerating ? "Gerando..." : "Gerar Modelo"}</span>
           </button>
 
           <button
+            type="button"
+            onClick={handleDownloadSTL}
+            className="flex items-center justify-center gap-1.5 rounded-xl bg-slate-800 border border-slate-700 py-3 text-xs font-bold text-slate-200 hover:bg-slate-700 active:scale-98 transition cursor-pointer"
+          >
+            <Download className="h-4 w-4" />
+            <span>Baixar .STL</span>
+          </button>
+
+          <button
+            type="button"
             onClick={handleSend}
-            className="flex items-center justify-center gap-1.5 rounded-xl bg-indigo-600 py-3 text-xs font-bold text-white hover:bg-indigo-500 transition shadow-md shadow-indigo-600/30"
+            className="flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 py-3 text-xs font-bold text-white shadow-md shadow-emerald-600/30 hover:bg-emerald-500 active:scale-98 transition cursor-pointer"
           >
             <Send className="h-4 w-4" />
-            <span>Enviar para Fila</span>
+            <span>Enviar à Fila</span>
           </button>
         </div>
       </div>
