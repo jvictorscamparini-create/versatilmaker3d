@@ -26,6 +26,7 @@ import {
   Scissors,
   Cpu,
   Settings2,
+  Zap,
 } from "lucide-react";
 
 interface Generator3DViewProps {
@@ -359,7 +360,7 @@ export const Generator3DView: React.FC<Generator3DViewProps> = ({ onSendToQueue 
   const [autoRotate, setAutoRotate] = useState(true);
   const [selectedColorIdx, setSelectedColorIdx] = useState(0);
 
-  // Gallery, Filters, Split-View, Cutting Plane & Slicer Tab State
+  // Gallery, Filters, Split-View, Cutting Plane, Slicer Tab & Auto-Optimization State
   const [activeTab, setActiveTab] = useState<"geometry" | "slicer" | "gallery">("geometry");
   const [galleryPhotos, setGalleryPhotos] = useState<GalleryPhoto[]>([]);
   const [activeFilter, setActiveFilter] = useState<string>("normal");
@@ -372,6 +373,10 @@ export const Generator3DView: React.FC<Generator3DViewProps> = ({ onSendToQueue 
   const [slicerInfillDensity, setSlicerInfillDensity] = useState<number>(15);
   const [slicerInfillPattern, setSlicerInfillPattern] = useState<string>("Gyroid");
   const [slicerSupports, setSlicerSupports] = useState<boolean>(true);
+
+  // Auto-Optimization Geometry State
+  const [autoOptimizeGeometry, setAutoOptimizeGeometry] = useState<boolean>(true);
+  const [polygonReductionLevel, setPolygonReductionLevel] = useState<"light" | "medium" | "aggressive">("medium");
 
   // Feedback states
   const [isGenerating, setIsGenerating] = useState(false);
@@ -405,8 +410,10 @@ export const Generator3DView: React.FC<Generator3DViewProps> = ({ onSendToQueue 
   const buildVaseGeometry = useCallback(
     (scale: number, twist: number, petals: number): THREE.BufferGeometry => {
       const height = 110 * (scale / 100);
-      const layers = 64;
-      const radialSegments = Math.max(32, petals * 8);
+      // Reduce layers and radial segments based on auto-optimization level
+      const layerDiv = polygonReductionLevel === "aggressive" ? 2 : polygonReductionLevel === "medium" ? 1.5 : 1.0;
+      const layers = Math.round(64 / layerDiv);
+      const radialSegments = Math.max(20, Math.round((petals * 8) / layerDiv));
 
       const positions: number[] = [];
       const indices: number[] = [];
@@ -453,7 +460,7 @@ export const Generator3DView: React.FC<Generator3DViewProps> = ({ onSendToQueue 
       geom.computeVertexNormals();
       return geom;
     },
-    []
+    [polygonReductionLevel]
   );
 
   const buildPlaqueGroup = useCallback((text: string, scale: number): THREE.Group => {
@@ -621,8 +628,16 @@ export const Generator3DView: React.FC<Generator3DViewProps> = ({ onSendToQueue 
         baseMesh.position.y = 1.5 * f;
         group.add(baseMesh);
 
+        // Adjust resolution grid size based on autoOptimizeGeometry & reduction level
+        let lithoSize = 64;
+        if (autoOptimizeGeometry) {
+          if (polygonReductionLevel === "aggressive") lithoSize = 28;
+          else if (polygonReductionLevel === "medium") lithoSize = 36;
+          else if (polygonReductionLevel === "light") lithoSize = 48;
+        }
+
         if (!imgSrc) {
-          const reliefGeom = new THREE.PlaneGeometry(width, height, 48, 48);
+          const reliefGeom = new THREE.PlaneGeometry(width, height, lithoSize, lithoSize);
           const pos = reliefGeom.getAttribute("position");
           for (let i = 0; i < pos.count; i++) {
             const x = pos.getX(i);
@@ -646,7 +661,7 @@ export const Generator3DView: React.FC<Generator3DViewProps> = ({ onSendToQueue 
         }
         img.onload = () => {
           const canvas = document.createElement("canvas");
-          const size = 64;
+          const size = lithoSize;
           canvas.width = size;
           canvas.height = size;
           const ctx = canvas.getContext("2d");
@@ -677,7 +692,7 @@ export const Generator3DView: React.FC<Generator3DViewProps> = ({ onSendToQueue 
         img.src = imgSrc;
       });
     },
-    []
+    [autoOptimizeGeometry, polygonReductionLevel]
   );
 
   // Setup Three.js Scene and Renderer
@@ -979,7 +994,7 @@ export const Generator3DView: React.FC<Generator3DViewProps> = ({ onSendToQueue 
         setTwistAngle((prev) => (prev + 45) % 360);
       }
       setIsGenerating(false);
-      setDownloadSuccessToast("Novo modelo 3D fatiável gerado com sucesso!");
+      setDownloadSuccessToast("Novo modelo 3D otimizado e fatiável gerado com sucesso!");
       setTimeout(() => setDownloadSuccessToast(null), 3500);
     }, 800);
   };
@@ -1028,7 +1043,7 @@ export const Generator3DView: React.FC<Generator3DViewProps> = ({ onSendToQueue 
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
 
-      setDownloadSuccessToast(`Arquivo STL binário baixado: ${filename} (${stats.triangles.toLocaleString()} triângulos)`);
+      setDownloadSuccessToast(`Arquivo STL otimizado baixado: ${filename} (${stats.triangles.toLocaleString()} triângulos)`);
       setTimeout(() => setDownloadSuccessToast(null), 4500);
     }
   };
@@ -1064,10 +1079,10 @@ export const Generator3DView: React.FC<Generator3DViewProps> = ({ onSendToQueue 
           </div>
           <div>
             <h1 className="text-2xl font-black tracking-tight text-white leading-tight">
-              Gerador 3D Paramétrico & Fatiador Integrado
+              Gerador 3D Paramétrico & Auto-Otimização
             </h1>
             <p className="text-xs text-slate-400">
-              Configure geometria, parâmetros de fatiamento (infill, suportes) e exporte modelos STL prontos para impressão.
+              Reduza automaticamente a contagem de polígonos de modelos complexos para facilitar a exportação STL e fatiamento.
             </p>
           </div>
         </div>
@@ -1431,12 +1446,59 @@ export const Generator3DView: React.FC<Generator3DViewProps> = ({ onSendToQueue 
           </div>
         )}
 
-        {/* TAB 2: SLICER PARAMETERS */}
+        {/* TAB 2: SLICER PARAMETERS & AUTO-OPTIMIZATION */}
         {activeTab === "slicer" && (
           <div className="flex flex-col gap-4">
             <h3 className="text-xs font-bold uppercase tracking-wider text-slate-300">
-              CONFIGURAÇÕES DO SLICER (FATIAMENTO & CONSUMO)
+              CONFIGURAÇÕES DO SLICER & OTIMIZAÇÃO
             </h3>
+
+            {/* Auto-Optimization Geometry Section */}
+            <div className="rounded-xl bg-[#090d17] p-3.5 border border-indigo-500/30 flex flex-col gap-2.5">
+              <div className="flex items-center justify-between">
+                <label className="text-[11px] font-semibold text-slate-200 flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={autoOptimizeGeometry}
+                    onChange={(e) => setAutoOptimizeGeometry(e.target.checked)}
+                    className="accent-indigo-500 rounded"
+                  />
+                  <span className="flex items-center gap-1 text-indigo-300 font-bold">
+                    <Zap className="h-3.5 w-3.5" />
+                    <span>Auto-Otimização de Geometria (Redução de Polígonos)</span>
+                  </span>
+                </label>
+                <span className="text-[10px] text-emerald-400 font-medium">Slicer-Friendly</span>
+              </div>
+
+              {autoOptimizeGeometry && (
+                <div className="flex flex-col gap-2 pt-1">
+                  <span className="text-[10px] text-slate-400">Nível de Redução de Malha:</span>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {[
+                      { id: "light", label: "Leve (~25%)" },
+                      { id: "medium", label: "Média (~50%)" },
+                      { id: "aggressive", label: "Agressiva (~75%)" },
+                    ].map((lvl) => (
+                      <button
+                        key={lvl.id}
+                        onClick={() => setPolygonReductionLevel(lvl.id as any)}
+                        className={`rounded-lg py-1.5 text-[10px] font-bold transition cursor-pointer ${
+                          polygonReductionLevel === lvl.id
+                            ? "bg-indigo-600 text-white shadow-sm"
+                            : "bg-[#0d1320] border border-slate-800 text-slate-300 hover:bg-slate-800"
+                        }`}
+                      >
+                        {lvl.label}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-[10px] text-slate-500">
+                    Reduz o número de triângulos em modelos de fotos e relevos 3D, garantindo abertura rápida e fatiamento sem travamentos.
+                  </p>
+                </div>
+              )}
+            </div>
 
             {/* Layer Height */}
             <div className="rounded-xl bg-[#090d17] p-3.5 border border-slate-800/80">
