@@ -159,6 +159,20 @@ export interface MarketAnalysisItem {
   };
 }
 
+export interface SlicerOptimization {
+  layerHeight: string;
+  infillDensity: string;
+  infillPattern: string;
+  wallPerimeters: number;
+  printTemperature: string;
+  supportNeeded: boolean;
+  supportType?: string;
+  printOrientation: string;
+  estimatedTimeHours: number;
+  estimatedWeightGrams: number;
+  aiTips: string[];
+}
+
 export interface CreativeProject {
   id: string;
   productName: string;
@@ -185,6 +199,7 @@ export interface CreativeProject {
     };
   };
   mockupPrompts?: string[];
+  slicerOptimization?: SlicerOptimization;
 }
 
 export interface Model3DItem {
@@ -247,5 +262,6 @@ export interface CreativeAdResult {
     };
   };
   mockupPrompts: string[];
+  slicerOptimization?: SlicerOptimization;
 }
 

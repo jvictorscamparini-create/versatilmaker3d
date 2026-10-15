@@ -80,7 +80,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
 
         {/* Quick Action Buttons */}
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => onNavigate("gerador-3d")}
+            className="flex items-center gap-1.5 rounded-xl border border-indigo-500/40 bg-indigo-950/40 px-3.5 py-2 text-xs font-bold text-indigo-300 hover:bg-indigo-900/50 active:scale-98 transition cursor-pointer"
+          >
+            <Box className="h-3.5 w-3.5 text-indigo-400" />
+            <span>Gerador 3D & STL</span>
+          </button>
           <button
             onClick={() => onNavigate("vendas")}
             className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white shadow hover:bg-emerald-500 active:scale-98 transition cursor-pointer"

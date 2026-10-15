@@ -32,6 +32,29 @@ export const MarketAnalysisView: React.FC = () => {
   const [showSavedList, setShowSavedList] = useState(false);
   const [showTutorialVideo, setShowTutorialVideo] = useState(false);
 
+  // Grounding state
+  const [groundingInsights, setGroundingInsights] = useState<string | null>(null);
+  const [isLoadingGrounding, setIsLoadingGrounding] = useState(false);
+
+  const handleFetchGrounding = async () => {
+    setIsLoadingGrounding(true);
+    try {
+      const res = await fetch("/api/market-analysis/grounding-insights", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: userTitle })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setGroundingInsights(data.insights);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsLoadingGrounding(false);
+    }
+  };
+
   // Niche trends async state
   const [isLoadingNiches, setIsLoadingNiches] = useState(false);
   const [nicheTrendsData, setNicheTrendsData] = useState<{
@@ -283,6 +306,41 @@ export const MarketAnalysisView: React.FC = () => {
             PLANO TRIAL
           </span>
         </div>
+      </div>
+
+      {/* GOOGLE SEARCH GROUNDING REAL-TIME INSIGHTS */}
+      <div className="rounded-2xl border border-emerald-500/30 bg-gradient-to-br from-[#121828] via-[#0d1a18] to-[#121828] p-5 shadow-lg flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-600/20 text-emerald-400 border border-emerald-500/30">
+              <Search className="h-4 w-4" />
+            </div>
+            <div>
+              <h3 className="text-xs font-bold uppercase tracking-wider text-emerald-300">
+                Google Search Grounding (Tendências Reais)
+              </h3>
+              <p className="text-[11px] text-slate-400">
+                Consulte dados ao vivo da web para o seu produto em marketplaces brasileiros.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            disabled={isLoadingGrounding}
+            onClick={handleFetchGrounding}
+            className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-500 transition cursor-pointer disabled:opacity-50"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${isLoadingGrounding ? "animate-spin" : ""}`} />
+            <span>{isLoadingGrounding ? "Buscando na Web..." : "Buscar Dados Reais"}</span>
+          </button>
+        </div>
+
+        {groundingInsights && (
+          <div className="mt-2 rounded-xl bg-[#091512] p-4 text-xs border border-emerald-500/30 text-emerald-100 leading-relaxed">
+            <p className="font-bold text-emerald-300 mb-1">🌐 Insights do Google Search Grounding:</p>
+            <p className="whitespace-pre-wrap">{groundingInsights}</p>
+          </div>
+        )}
       </div>
 
       {/* ASYNCHRONOUS NICHE TRENDS COMPARISON TABLE SECTION */}

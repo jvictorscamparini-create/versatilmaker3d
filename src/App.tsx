@@ -44,7 +44,7 @@ export default function App() {
   const [orders, setOrders] = useState<OrderItem[]>(() => {
     try {
       const saved = localStorage.getItem("versatil_maker_orders");
-      return saved ? JSON.parse(saved) : initialOrders;
+      return saved !== null ? JSON.parse(saved) : initialOrders;
     } catch {
       return initialOrders;
     }
@@ -53,7 +53,7 @@ export default function App() {
   const [filaments, setFilaments] = useState<Filament[]>(() => {
     try {
       const saved = localStorage.getItem("versatil_maker_filaments");
-      return saved ? JSON.parse(saved) : initialFilaments;
+      return saved !== null ? JSON.parse(saved) : initialFilaments;
     } catch {
       return initialFilaments;
     }
@@ -62,7 +62,7 @@ export default function App() {
   const [printers, setPrinters] = useState<Printer[]>(() => {
     try {
       const saved = localStorage.getItem("versatil_maker_printers");
-      return saved ? JSON.parse(saved) : initialPrinters;
+      return saved !== null ? JSON.parse(saved) : initialPrinters;
     } catch {
       return initialPrinters;
     }
@@ -71,7 +71,7 @@ export default function App() {
   const [productionCards, setProductionCards] = useState<ProductionCard[]>(() => {
     try {
       const saved = localStorage.getItem("versatil_maker_productionCards");
-      return saved ? JSON.parse(saved) : initialProductionCards;
+      return saved !== null ? JSON.parse(saved) : initialProductionCards;
     } catch {
       return initialProductionCards;
     }
@@ -80,7 +80,7 @@ export default function App() {
   const [savedCalculations, setSavedCalculations] = useState<SavedCalculation[]>(() => {
     try {
       const saved = localStorage.getItem("versatil_maker_savedCalculations");
-      return saved ? JSON.parse(saved) : initialSavedCalculations;
+      return saved !== null ? JSON.parse(saved) : initialSavedCalculations;
     } catch {
       return initialSavedCalculations;
     }
@@ -89,7 +89,7 @@ export default function App() {
   const [customers, setCustomers] = useState<Customer[]>(() => {
     try {
       const saved = localStorage.getItem("versatil_maker_customers");
-      return saved ? JSON.parse(saved) : initialCustomers;
+      return saved !== null ? JSON.parse(saved) : initialCustomers;
     } catch {
       return initialCustomers;
     }
@@ -143,12 +143,12 @@ export default function App() {
       setProductionCards([]);
       setSavedCalculations([]);
       setCustomers([]);
-      localStorage.removeItem("versatil_maker_orders");
-      localStorage.removeItem("versatil_maker_filaments");
-      localStorage.removeItem("versatil_maker_printers");
-      localStorage.removeItem("versatil_maker_productionCards");
-      localStorage.removeItem("versatil_maker_savedCalculations");
-      localStorage.removeItem("versatil_maker_customers");
+      localStorage.setItem("versatil_maker_orders", JSON.stringify([]));
+      localStorage.setItem("versatil_maker_filaments", JSON.stringify([]));
+      localStorage.setItem("versatil_maker_printers", JSON.stringify([]));
+      localStorage.setItem("versatil_maker_productionCards", JSON.stringify([]));
+      localStorage.setItem("versatil_maker_savedCalculations", JSON.stringify([]));
+      localStorage.setItem("versatil_maker_customers", JSON.stringify([]));
     } else {
       setOrders(initialOrders);
       setFilaments(initialFilaments);

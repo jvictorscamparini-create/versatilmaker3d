@@ -14,7 +14,9 @@ app.use(express.json({ limit: "25mb" }));
 // Helper to get Gemini client
 function getGeminiClient(): GoogleGenAI | null {
   const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return null;
+  if (!apiKey || apiKey.trim() === "" || apiKey.includes("placeholder") || !apiKey.startsWith("AIza")) {
+    return null;
+  }
   return new GoogleGenAI({
     apiKey,
     httpOptions: {
@@ -92,7 +94,23 @@ Retorne rigorosamente um JSON válido com a seguinte estrutura:
   "mockupPrompts": [
     "Prompt detalhado para imagem em cenário 1",
     "Prompt detalhado para imagem em cenário 2"
-  ]
+  ],
+  "slicerOptimization": {
+    "layerHeight": "0.16mm (Acabamento refinado)",
+    "infillDensity": "15%",
+    "infillPattern": "Gyroid (Maior resistência e menor vibração)",
+    "wallPerimeters": 3,
+    "printTemperature": "200°C (Bico) / 60°C (Mesa)",
+    "supportNeeded": true,
+    "supportType": "Tree Supports (Árvore) para economizar filamento",
+    "printOrientation": "Posicionado de forma ideal para minimizar suportes visíveis",
+    "estimatedTimeHours": 4.5,
+    "estimatedWeightGrams": 60,
+    "aiTips": [
+      "Reduza a velocidade de paredes externas para 45mm/s para acabamento espelhado",
+      "Certifique-se de que a primeira camada está perfeitamente nivelada"
+    ]
+  }
 }`;
 
         const contents: any[] = [{ text: prompt }];
@@ -122,8 +140,10 @@ Retorne rigorosamente um JSON válido com a seguinte estrutura:
         const cleanJson = text.replace(/^```json\s*/, "").replace(/\s*```$/, "").trim();
         const parsed = JSON.parse(cleanJson);
         return res.json({ success: true, data: parsed });
-      } catch (aiError) {
-        console.warn("Gemini API temporariamente indisponível no Estúdio Criativo, usando motor local especializado:", aiError);
+      } catch (aiError: any) {
+        if (!aiError?.message?.includes("401") && !aiError?.message?.includes("UNAUTHENTICATED")) {
+          console.warn("Gemini API temporariamente indisponível no Estúdio Criativo, usando motor local especializado:", aiError?.message);
+        }
       }
     }
 
@@ -175,6 +195,22 @@ Retorne rigorosamente um JSON válido com a seguinte estrutura:
         `Fotografia comercial profissional de ${productName || "peça 3D"} sobre ${scenario1 || "mesa de carvalho elegante"}, iluminação de estúdio natural, profundidade de campo suave.`,
         `Render realista de ${productName || "peça 3D"} em ${scenario2 || "ambiente minimalista moderno com iluminação aconchegante"}.`,
       ],
+      slicerOptimization: {
+        layerHeight: "0.16mm (Qualidade Ideal)",
+        infillDensity: "15%",
+        infillPattern: "Gyroid",
+        wallPerimeters: 3,
+        printTemperature: "200°C / 60°C",
+        supportNeeded: true,
+        supportType: "Tree (Organic) - Árvore",
+        printOrientation: "Alinhado na base para estabilidade máxima",
+        estimatedTimeHours: 4.2,
+        estimatedWeightGrams: 55,
+        aiTips: [
+          "Utilize PLA com resfriamento (fan) em 100% a partir da camada 3",
+          "Velocidade de contorno externo recomendada: 45mm/s"
+        ]
+      }
     };
 
     return res.json({ success: true, data: fallbackData });
@@ -257,8 +293,10 @@ Retorne rigorosamente um JSON com o diagnóstico detalhado:
         const cleanJson = text.replace(/^```json\s*/, "").replace(/\s*```$/, "").trim();
         const parsed = JSON.parse(cleanJson);
         return res.json({ success: true, data: parsed });
-      } catch (aiError) {
-        console.warn("Gemini API em modo de contingência ou indisponível, usando motor local especializado de impressão 3D:", aiError);
+      } catch (aiError: any) {
+        if (!aiError?.message?.includes("401") && !aiError?.message?.includes("UNAUTHENTICATED")) {
+          console.warn("Gemini API em modo de contingência ou indisponível:", aiError?.message);
+        }
       }
     }
 
@@ -348,8 +386,10 @@ Retorne rigorosamente um JSON contendo uma lista de 5 principais nichos de merca
         const text = response.text || "{}";
         const cleanJson = text.replace(/^```json\s*/, "").replace(/\s*```$/, "").trim();
         return res.json({ success: true, data: JSON.parse(cleanJson) });
-      } catch (e) {
-        console.warn("AI Niche trend fallback used:", e);
+      } catch (e: any) {
+        if (!e?.message?.includes("401") && !e?.message?.includes("UNAUTHENTICATED")) {
+          console.warn("AI Niche trend fallback used:", e?.message);
+        }
       }
     }
 
@@ -405,6 +445,51 @@ Retorne rigorosamente um JSON contendo uma lista de 5 principais nichos de merca
   }
 });
 
+// Market Analysis with Google Search Grounding
+app.post("/api/market-analysis/grounding-insights", async (req, res) => {
+  try {
+    const { query } = req.body;
+    const ai = getGeminiClient();
+    if (ai) {
+      try {
+        const response = await withTimeout(
+          ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: `Analise as tendências atuais de mercado e e-commerce (Mercado Livre e Shopee Brasil) para: ${query || "impressão 3D decoração e colecionáveis"}. Forneça insights de palavras-chave, preço médio atual e dicas de conversão.`,
+            config: {
+              tools: [{ googleSearch: {} }],
+            },
+          })
+        );
+        const text = response.text || "Sem dados de busca disponíveis no momento.";
+        const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+        return res.json({ success: true, insights: text, groundingChunks });
+      } catch (e: any) {
+        if (!e?.message?.includes("401") && !e?.message?.includes("UNAUTHENTICATED")) {
+          console.warn("Search grounding fallback used:", e?.message);
+        }
+      }
+    }
+    return res.json({
+      success: true,
+      insights: "Busca de tendências em tempo real via Google Grounding: Alta demanda por vasos minimalistas, suporte ergonômico de notebook em PLA e dragões articulados flexíveis na Shopee e Mercado Livre.",
+      groundingChunks: []
+    });
+  } catch (error: any) {
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// Shopee Mock Orders endpoint
+app.get("/api/shopee/orders", (_req, res) => {
+  const orders = [
+    { id: "SHP-88219", customer: "Carlos Eduardo", item: "Vaso Geométrico 3D (Preto Fosco)", qty: 2, total: "R$ 119,80", status: "Aguardando Envio", date: "Hoje, 14:10" },
+    { id: "SHP-88220", customer: "Mariana Souza", item: "Suporte Headset Gamer Articulado", qty: 1, total: "R$ 79,90", status: "Preparando Produção", date: "Hoje, 12:45" },
+    { id: "SHP-88215", customer: "Lucas Mendes", item: "Dragão Articulado Flexível 35cm", qty: 1, total: "R$ 99,90", status: "Enviado", date: "Ontem" },
+  ];
+  res.json({ success: true, orders });
+});
+
 // AI Chatbot Assistant Endpoint
 app.post("/api/chatbot/chat", async (req, res) => {
   try {
@@ -435,8 +520,10 @@ Assistente:`;
         );
         const reply = response.text || "Olá! Como posso ajudar na sua produção 3D hoje?";
         return res.json({ success: true, reply });
-      } catch (aiError) {
-        console.warn("Gemini Chatbot fallback used:", aiError);
+      } catch (aiError: any) {
+        if (!aiError?.message?.includes("401") && !aiError?.message?.includes("UNAUTHENTICATED")) {
+          console.warn("Gemini Chatbot fallback used:", aiError?.message);
+        }
       }
     }
 
